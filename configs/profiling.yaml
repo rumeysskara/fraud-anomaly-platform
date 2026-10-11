@@ -75,6 +75,21 @@ entity:
 d1_semantics:
   tolerance_days: 1            # |gap - D1| <= tolerance counts as a match
 
+eda:
+  # top-N category count is shared: distributions.top_n
+  acf_min_lag: 1               # autocorrelation lags in days
+  acf_max_lag: 14
+  week_days: 7                 # weekly period; also the before/after comparison window
+  peak_window: [20, 27]        # day offsets (reference date + offset) of the requested peak
+  peak_len: 8                  # length of the automatically searched peak window
+  peak_search_max_day: 60
+  spike_day: 92
+  top_amounts: 20
+  amount_decimals: 3           # rounding of TransactionAmt (removes float32 noise)
+  decile_count: 10
+  min_n_flag: 100              # groups with fewer rows are flagged small_n
+  dpi: 130                     # EDA chart resolution
+
 figures:
   dpi: 120
   amount_bins: 80

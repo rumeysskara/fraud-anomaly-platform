@@ -9,16 +9,11 @@ from src.profiling.config import profiling_config
 
 MISSING = "(eksik)"
 OTHER = "(diğer)"
-# EDA constants (not part of profiling.yaml; see docs/eda.md).
-LAGS = range(1, 15)  # autocorrelation lags in days
-WEEK = 7
-PEAK_WINDOW = (20, 27)  # day offsets named in the task
-PEAK_LEN = 8
-PEAK_SEARCH_MAX = 60
-SPIKE_DAY = 92
-TOP_AMOUNTS = 20
-AMOUNT_DECIMALS = 3
-MIN_N_FLAG = 100  # groups with fewer rows are flagged small_n
+
+
+def eda_config() -> dict:
+    """The `eda` section of configs/profiling.yaml."""
+    return profiling_config("eda")
 
 
 def top_n() -> int:
@@ -42,13 +37,15 @@ def daily_counts(dt: pd.Series) -> pd.Series:
     return days.reindex(full, fill_value=0).rename("n")
 
 
-def autocorrelation(counts: pd.Series, lags: range = LAGS) -> pd.DataFrame:
+def autocorrelation(counts: pd.Series, cfg: dict | None = None) -> pd.DataFrame:
     """Autocorrelation of the daily series for each lag, raw and with a 7-day mean removed.
 
     The detrended series subtracts a centred 7-day rolling mean, which removes the level/trend
     but keeps a weekly pattern.
     """
-    resid = counts - counts.rolling(WEEK, center=True).mean()
+    cfg = cfg or eda_config()
+    lags = range(cfg["acf_min_lag"], cfg["acf_max_lag"] + 1)
+    resid = counts - counts.rolling(cfg["week_days"], center=True).mean()
     rows = [
         {"lag": lag, "acf_raw": counts.autocorr(lag), "acf_detrended": resid.autocorr(lag)}
         for lag in lags
@@ -68,12 +65,15 @@ def weekday_profile(counts: pd.Series) -> pd.DataFrame:
     )
 
 
-def window_stats(counts: pd.Series, start: int, end: int, ref_date: pd.Timestamp) -> dict:
-    """Mean daily count inside day offsets [start, end] vs the 7 days before and after."""
+def window_stats(
+    counts: pd.Series, start: int, end: int, ref_date: pd.Timestamp, cfg: dict | None = None
+) -> dict:
+    """Mean daily count inside day offsets [start, end] vs the week_days before and after."""
+    week = (cfg or eda_config())["week_days"]
     day = (counts.index - ref_date).days
     inside = counts[(day >= start) & (day <= end)]
-    before = counts[(day >= start - WEEK) & (day < start)]
-    after = counts[(day > end) & (day <= end + WEEK)]
+    before = counts[(day >= start - week) & (day < start)]
+    after = counts[(day > end) & (day <= end + week)]
     return {
         "start_day": start,
         "end_day": end,
@@ -86,22 +86,28 @@ def window_stats(counts: pd.Series, start: int, end: int, ref_date: pd.Timestamp
     }
 
 
-def best_peak_window(counts: pd.Series, ref_date: pd.Timestamp) -> tuple[int, int]:
-    """Day offsets of the PEAK_LEN-day window with the highest mean count (day <= search max)."""
+def best_peak_window(
+    counts: pd.Series, ref_date: pd.Timestamp, cfg: dict | None = None
+) -> tuple[int, int]:
+    """Day offsets of the peak_len-day window with the highest mean count (day <= search max)."""
+    cfg = cfg or eda_config()
+    peak_len = cfg["peak_len"]
     day = (counts.index - ref_date).days
-    sub = counts[day <= PEAK_SEARCH_MAX]
-    roll = sub.rolling(PEAK_LEN).mean()
+    sub = counts[day <= cfg["peak_search_max_day"]]
+    roll = sub.rolling(peak_len).mean()
     end = roll.idxmax()
-    return int((end - ref_date).days - PEAK_LEN + 1), int((end - ref_date).days)
+    return int((end - ref_date).days - peak_len + 1), int((end - ref_date).days)
 
 
-def spike_stats(counts: pd.Series, ref_date: pd.Timestamp, spike_day: int = SPIKE_DAY) -> dict:
-    """Size of the jump on spike_day: vs previous day, vs prior 7-day mean, and level shift."""
+def spike_stats(counts: pd.Series, ref_date: pd.Timestamp, cfg: dict | None = None) -> dict:
+    """Size of the jump on the config spike_day: vs previous day, prior week mean, level shift."""
+    cfg = cfg or eda_config()
+    spike_day, week = cfg["spike_day"], cfg["week_days"]
     day = (counts.index - ref_date).days
     at = float(counts[day == spike_day].iloc[0])
     prev = float(counts[day == spike_day - 1].iloc[0])
-    before = counts[(day >= spike_day - WEEK) & (day < spike_day)]
-    after = counts[(day > spike_day) & (day <= spike_day + WEEK)]
+    before = counts[(day >= spike_day - week) & (day < spike_day)]
+    after = counts[(day > spike_day) & (day <= spike_day + week)]
     return {
         "spike_day": spike_day,
         "date": str((ref_date + pd.Timedelta(days=spike_day)).date()),
@@ -116,9 +122,15 @@ def spike_stats(counts: pd.Series, ref_date: pd.Timestamp, spike_day: int = SPIK
     }
 
 
-def top_amounts(amount: pd.Series, n: int = TOP_AMOUNTS) -> pd.DataFrame:
+def top_amounts(amount: pd.Series, cfg: dict | None = None) -> pd.DataFrame:
     """Most frequent TransactionAmt values with count and share of all rows."""
-    vc = amount.astype("float64").round(AMOUNT_DECIMALS).value_counts().head(n)
+    cfg = cfg or eda_config()
+    vc = (
+        amount.astype("float64")
+        .round(cfg["amount_decimals"])
+        .value_counts()
+        .head(cfg["top_amounts"])
+    )
     return pd.DataFrame(
         {
             "amount": vc.index.astype("float64"),
@@ -150,9 +162,10 @@ def hour_groups(dt: pd.Series) -> pd.Series:
     return pd.Series(dt.dt.hour.to_numpy(), index=dt.index, name="hour")
 
 
-def decile_groups(amount: pd.Series) -> pd.Series:
+def decile_groups(amount: pd.Series, cfg: dict | None = None) -> pd.Series:
     """TransactionAmt decile labels D1..D10 with bounds learned from this (fit) series."""
-    edges = np.unique(amount.quantile(np.linspace(0, 1, 11)).to_numpy())
+    count = (cfg or eda_config())["decile_count"]
+    edges = np.unique(amount.quantile(np.linspace(0, 1, count + 1)).to_numpy())
     codes = pd.cut(amount, bins=edges, include_lowest=True)
     labels = [
         f"D{i + 1} ({iv.left:.0f}-{iv.right:.0f})" for i, iv in enumerate(codes.cat.categories)

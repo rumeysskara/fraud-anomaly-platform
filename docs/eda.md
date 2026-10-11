@@ -70,9 +70,23 @@ Yani tutar ile fraud oranı arasında doğrusal bir ilişki yok; uçlarda artı�
 Bu tablolar, yeni kart, identity yokluğu, addr2, e-posta eşleşmesi, saat ve tutar uçları gibi kuralların hangi yönde "makul" görüneceğini gösterir. Bunlardan bazıları
 sezgiyle ters olabilir (örn. P = R'de oran yüksek, P != R'de düşük); bu tür kuralların eşiği veya ağırlığı bu tablolardan çıkarılmamalıdır.
 
+## Yorum
+Aşağıdakiler betimleyici okumadır; nedensellik iddiası taşımaz ve hiçbiri kural eşiği veya ağırlık seçimi için kullanılmaz.
+
+1. **Saat ve referans saat kayması.** Fraud oranının en yüksek olduğu 7-9. saatler (%10,1 / %9,7 / %10,6) aynı zamanda işlem hacminin en düşük olduğu saatlerle çakışıyor
+   (saat başına 3.156 / 2.181 / 1.844 işlem; akşam saatlerinde ~33.000). Bu çakışma, referans tarihin ve dolayısıyla saat diliminin bir varsayım olduğu ve
+   `TransactionDT`'den türetilen mutlak saatin yerel saat olmayabileceği düşüncesiyle tutarlıdır: veriye göre "gece dibi" 7-9. saatte görünüyor. Bu, kayma olduğunu
+   kanıtlamaz. Ayrıca bu saatlerde n küçük (mutlak fraud sayısı 195-319) ve %95 aralıkları geniş (örn. 9. saat %9,3-12,1 civarı), bu yüzden mutlak saat güvenilir yorumlanmamalı.
+2. **has_identity ve P = R, ProductCD ile karışık.** `ProductCD = W` işlemlerinde identity kaydı hiç yok (Adım 1) ve W aynı zamanda en düşük fraud oranlı ürün (%2,1; C %11,3).
+   Bu yüzden has_identity=True (%7,6) ile False (%2,1) arasındaki fark ve P = R (%9,3) ile P != R (%2,8) arasındaki fark ürün karışımından ayrıştırılmadı; nedensel yorumlanmamalı.
+   Bu iki değişkenin ProductCD içinde ayrı ayrı bakılması bu raporda yapılmadı.
+3. **Tutarda U biçimi.** En küçük desilde (D1: 0-26) oran %5,4; en büyük desilde (D10: 277+) %5,2; ortada D4 %2,0 ve D7 %1,9. İki uç ayrı ayrı yorumlanmalı:
+   küçük tutarlarda yüksek oran, küçük tutarlı "kart deneme" (card testing) davranışıyla tutarlı olabilir; büyük tutarlarda yüksek oran ayrı bir olgudur (örn. daha değerli işlemler)
+   ve aynı açıklamayla anlatılamaz. Hiçbiri doğrulanmadı; hiçbiri kural eşiği seçimi için kullanılmaz.
+
 ## Sınırlar
 - Referans tarih varsayım; gün adları, saatler ve "Noel dönemi" yorumu bu varsayıma bağlı.
 - B bölümü tek değişkenli, ilişkili gruplar nedeniyle birbirinden bağımsız değildir; çok sayıda karşılaştırma yapıldığı için küçük farklar şansa bağlı olabilir.
 - Oranlar fit dönemine özgüdür; holdout'ta aynı değerler beklenmez ve kontrol edilmedi.
-- EDA sabitleri (lag aralığı, pencere uzunluğu, 92. gün, ilk-N, `small_n` eşiği 100) `src/profiling/eda.py` içinde adlandırılmış sabitlerdir; `configs/` yazma izni bu iş için olmadığından YAML'a taşınmadı.
+- EDA sabitleri (lag aralığı, pencere uzunlukları, 92. gün, ilk-20 tutar, `small_n` eşiği 100, desil sayısı, grafik çözünürlüğü) `configs/profiling.yaml` içindeki `eda:` bölümündedir; kod yalnızca `src/profiling/config.py` üzerinden okur. İlk-10 kategori sayısı `distributions.top_n` ile ortaktır.
 - Günlük seri 182 günlük; haftalık döngü için yalnızca ~26 hafta var.

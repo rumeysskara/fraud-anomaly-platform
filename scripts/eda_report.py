@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 
 def part_a(X: pd.DataFrame, ref_date: pd.Timestamp, out: Path) -> None:
     """Label-free tables and charts on all rows."""
+    cfg = eda.eda_config()
     n = eda.top_n()
     specs = [
         ("ProductCD", None, "ProductCD"),
@@ -52,14 +53,17 @@ def part_a(X: pd.DataFrame, ref_date: pd.Timestamp, out: Path) -> None:
     acf = eda.autocorrelation(counts)
     acf.to_csv(out / "a_acf.csv", index=False)
     figs.line_acf(
-        acf, eda.WEEK, "Günlük işlem sayısının otokorelasyonu (lag 1-14)", out / "a_acf.png"
+        acf,
+        cfg["week_days"],
+        f"Günlük işlem sayısının otokorelasyonu (lag {cfg['acf_min_lag']}-{cfg['acf_max_lag']})",
+        out / "a_acf.png",
     )
     eda.weekday_profile(counts).to_csv(out / "a_weekday_profile.csv", index=False)
 
     day = (counts.index - ref_date).days
     windows, rows = [], []
-    lo, hi = eda.PEAK_WINDOW
-    if day.max() >= hi + 7:
+    lo, hi = cfg["peak_window"]
+    if day.max() >= hi + cfg["week_days"]:
         found = eda.best_peak_window(counts, ref_date)
         for name, (a, b) in (("istenen pencere", (lo, hi)), ("veride en yüksek pencere", found)):
             rows.append({"window": name, **eda.window_stats(counts, a, b, ref_date)})
@@ -67,12 +71,12 @@ def part_a(X: pd.DataFrame, ref_date: pd.Timestamp, out: Path) -> None:
                 (a, b, f"{name}: gün {a}-{b} ({rows[-1]['start_date']} - {rows[-1]['end_date']})")
             )
         pd.DataFrame(rows).to_csv(out / "a_peak_windows.csv", index=False)
-    if day.max() >= eda.SPIKE_DAY + 7:
+    if day.max() >= cfg["spike_day"] + cfg["week_days"]:
         pd.DataFrame([eda.spike_stats(counts, ref_date)]).to_csv(out / "a_spike.csv", index=False)
         figs.daily_volume(
             counts,
             windows,
-            eda.SPIKE_DAY,
+            cfg["spike_day"],
             ref_date,
             "Günlük işlem hacmi: Noel dönemi tepesi ve 92. gün sıçraması",
             out / "a_daily_volume.png",
@@ -120,7 +124,7 @@ def part_b(Xf: pd.DataFrame, yf: pd.Series, ref_date: pd.Timestamp, out: Path) -
         ),
     ]
     for key, label, groups, vertical in items:
-        tbl = fraud_rate_by(yf, groups, eda.MIN_N_FLAG)
+        tbl = fraud_rate_by(yf, groups, eda.eda_config()["min_n_flag"])
         tbl.to_csv(out / f"b_{key}.csv", index=False)
         figs.bar_rate(
             tbl,

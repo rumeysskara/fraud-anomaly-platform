@@ -48,7 +48,7 @@ def test_peak_and_spike_stats():
 
 def test_top_amounts_rounds_float32_noise():
     amt = pd.Series([107.95, 107.95, 59.0], dtype="float32")
-    out = eda.top_amounts(amt, n=2)
+    out = eda.top_amounts(amt, {**eda.eda_config(), "top_amounts": 2})
     assert out.loc[0, "amount"] == 107.95 and out.loc[0, "n"] == 2
 
 
@@ -99,3 +99,14 @@ def test_figures_written(tmp_path):
     figs.daily_volume(counts, [(18, 25, "w")], 92, REF, "t", tmp_path / "d.png")
     figs.bar_amounts(eda.top_amounts(pd.Series([1.0, 1.0, 2.0])), "t", tmp_path / "m.png")
     assert len(list(tmp_path.glob("*.png"))) == 6
+
+
+def test_eda_constants_come_from_config():
+    cfg = eda.eda_config()
+    assert cfg["spike_day"] == 92 and cfg["min_n_flag"] == 100 and cfg["week_days"] == 7
+    acf = eda.autocorrelation(_counts(), {**cfg, "acf_min_lag": 2, "acf_max_lag": 5})
+    assert list(acf["lag"]) == [2, 3, 4, 5]
+    s = eda.spike_stats(_counts(), REF, {**cfg, "spike_day": 18})
+    assert s["spike_day"] == 18 and s["date"] == "2017-12-19"
+    dec = eda.decile_groups(pd.Series(np.arange(1.0, 101.0)), {**cfg, "decile_count": 4})
+    assert dec.nunique() == 4

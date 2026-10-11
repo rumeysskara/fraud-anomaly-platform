@@ -11,8 +11,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from src.profiling.config import profiling_config  # noqa: E402
+
 BLUE, ORANGE, GREY, RED = "#2f6690", "#d1873a", "#b8b8b8", "#b23a48"  # colour-blind friendly
-DPI = 130
 FONT = 10
 
 
@@ -26,7 +27,7 @@ def _style(ax: plt.Axes) -> None:
 def _save(fig: plt.Figure, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(path, dpi=DPI)
+    fig.savefig(path, dpi=profiling_config("eda")["dpi"])
     plt.close(fig)
     return path
 
