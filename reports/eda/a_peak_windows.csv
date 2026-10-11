@@ -1,0 +1,3 @@
+window,start_day,end_day,start_date,end_date,mean_inside,mean_before_7d,mean_after_7d,ratio_inside_vs_surround
+istenen pencere,20,27,2017-12-21,2017-12-28,5375.0,4700.571428571428,3434.4285714285716,1.3214505224339275
+veride en yüksek pencere,18,25,2017-12-19,2017-12-26,5883.5,4325.142857142857,3345.285714285714,1.5340733428938595

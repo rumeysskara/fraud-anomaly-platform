@@ -1,0 +1,2 @@
+spike_day,date,count,previous_day,ratio_vs_previous_day,mean_prior_7d,ratio_vs_prior_7d_mean,mean_next_7d,level_shift_next7_vs_prior7,next_day_count
+92,2018-03-03,6252.0,4007.0,1.5602695283254304,3198.714285714286,1.9545353043633602,3496.8571428571427,1.0932070921352328,4524.0
