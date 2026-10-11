@@ -1,0 +1,13 @@
+id,name,type,fit_share,fit_mean_factor_when_applied,holdout_share,holdout_mean_factor_when_applied
+C1,business_hours_known_entity,multiplicative,0.2595,0.8999999761581421,0.5075,0.8999999761581421
+C2,low_volume_high_amount,multiplicative,0.004125,1.149999976158142,0.0044,1.149999976158142
+C3,weekend_established_entity,multiplicative,0.1706,0.949999988079071,0.0,1.0
+C4,trusted_entity,multiplicative,0.1621,0.75,0.2547,0.75
+C5,frequent_entity_temporal_weight,layer_weight,0.322075,0.8579322357387967,0.314,0.8541117781096963
+C6a,foreign_country,multiplicative,0.0438,1.2000000476837158,0.0641,1.2000000476837158
+C6b,missing_country_converted_amount,multiplicative,0.04965,1.100000023841858,0.0287,1.100000023841858
+C7,holiday_season_volume,multiplicative,0.0,1.0,0.0,1.0
+C8,new_card_high_amount,multiplicative,0.05945,1.149999976158142,0.0768,1.149999976158142
+C9a,product_c,multiplicative,0.0995,1.100000023841858,0.0954,1.100000023841858
+C9b,product_w,multiplicative,0.67785,0.949999988079071,0.5684,0.949999988079071
+G1,card_testing_floor,guard (condition true),0.00855,,0.0064,

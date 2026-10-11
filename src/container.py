@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
+from src.context.factory import load_engine
 from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
 from src.features.pipeline import FeaturePipeline
 from src.scoring.service import ScoringService
@@ -23,6 +24,9 @@ class Container(containers.DeclarativeContainer):
 
     # Step 4-5: fitted anomaly layers + weights + normalization tables (loaded, never trained).
     scoring_service = providers.Singleton(ScoringService.load, ARTIFACTS_DIR / "detectors")
+
+    # Step 6: context adjuster (configs/context.yaml + fit-learned params + Step 5 weights/table).
+    context_adjuster = providers.Singleton(load_engine, ARTIFACTS_DIR / "detectors")
 
 
 def create_container() -> Container:

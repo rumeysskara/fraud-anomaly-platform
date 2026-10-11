@@ -1,0 +1,236 @@
+# Step 6 - context-aware score adjustment (design given by the user, see docs/step6.md and
+# docs/decisions.md). No rule, factor or threshold is hardcoded in src/context; everything is here.
+#
+# Input score: anomaly_score_norm (Step 5, K-19). Pipeline (Chain of Responsibility):
+#   1. layer_weight rules (C5) re-aggregate the Step 5 layer scores and express the change as a factor
+#   2. multiplicative rules multiply the score (all matching rules apply, in the order listed)
+#   3. the product of all factors is clipped to [bounds.min_total, bounds.max_total]
+#   4. guard: when the card-testing signal is present the total factor cannot go below 1.0
+#   5. adjusted_score = clip(raw_score * total, 0, 1)
+#
+# Condition DSL: `all:` = list of clauses that must ALL hold. A clause is
+#   {feature: <column>, op: <==|!=|>=|<=|>|<|in|isna|notna>, value: <number|string|list|{param: name}>}
+# {param: name} refers to a value learned on the FIT set (see `learned_params`), saved by
+# scripts/run_context.py to <params_dir>/context_params.json. A NaN feature never satisfies a
+# comparison (only `isna`). Derived columns (src/context/derive.py):
+#   abs_amt_zscore_ent, known_device_or_email, ent_daily_avg, burst_ratio_24h, dominant_layer.
+# The label (isFraud) is never read for any value in this file.
+
+paths:
+  # Learned params are written here (full data); SAMPLE_N runs use <params_dir>/sample.
+  # NOTE: CLAUDE.md puts fitted objects under artifacts/; this step's write scope did not include
+  # artifacts/, so the file lives in reports/context/ for now (change this single value to move it).
+  params_dir: reports/context
+
+learned_params:
+  # Learned on the fit set (first 80% by TransactionDT) only.
+  amount_high:
+    column: TransactionAmt
+    quantile: 0.90
+  dominant_addr2:
+    column: addr2          # most frequent non-null fit value
+
+bounds:
+  min_total: 0.5
+  max_total: 1.5
+
+score_clip: {min: 0.0, max: 1.0}
+
+reporting:
+  # Label-free alarm profile: alarms on entities with at least this many previous transactions
+  # (same threshold as C4 "trusted"). Alarm budgets come from configs/settings.yaml.
+  long_history_min: 20
+
+guard:
+  id: G1
+  name: card_testing_floor
+  # small_amt_streak_1h = number of the entity's small (<= fit q10) transactions in the previous hour.
+  condition:
+    all:
+      - {feature: small_amt_streak_1h, op: ">=", value: 2}
+  min_total: 1.0
+  rationale: >-
+    A burst of small amounts on the same card group is the classic card-testing pattern. Context
+    discounts (business hours, trusted entity, product) must not hide it, so the total factor is
+    floored at 1.0: no adjustment can push the score below the raw score.
+
+derived:
+  # Parameters of derived columns used by the conditions.
+  daily_avg_min_days: 1.0          # ent_daily_avg = ent_txn_count / max(ent_age_days, this)
+  dominant_layer_weights_from: step5   # contributions use the Step 5 weights (configs/weights.yaml)
+
+rules:
+  - id: C1
+    group: C1
+    name: business_hours_known_entity
+    description: Local business hours (09-18) on a weekday for an entity that has history.
+    type: multiplicative
+    factor: 0.90
+    condition:
+      all:
+        - {feature: local_hour_est, op: ">=", value: 9}
+        - {feature: local_hour_est, op: "<", value: 18}
+        - {feature: is_weekend, op: "==", value: 0}
+        - {feature: ent_txn_count, op: ">=", value: 1}
+    rationale: >-
+      Most legitimate card-present and online shopping happens in local working hours; a card
+      group we have seen before transacting at that time is the least surprising case. Local hour
+      is an estimate (K-06, offset -6 h) and weekday uses the reference calendar (assumption 4).
+
+  - id: C2
+    group: C2
+    name: low_volume_high_amount
+    description: Transaction in the low-volume window (estimated local 00-06) with amount >= fit q90.
+    type: multiplicative
+    factor: 1.15
+    condition:
+      all:
+        - {feature: is_low_volume_window, op: "==", value: 1}
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+    rationale: >-
+      Large purchases in the hours when few customers are active are a common account-takeover
+      pattern (fraudster acts while the owner sleeps). Only high amounts are boosted so that
+      ordinary night activity is not penalized.
+
+  - id: C3
+    group: C3
+    name: weekend_established_entity
+    description: Weekend transaction by an established entity (>= 5 previous transactions).
+    type: multiplicative
+    factor: 0.95
+    condition:
+      all:
+        - {feature: is_weekend, op: "==", value: 1}
+        - {feature: ent_txn_count, op: ">=", value: 5}
+    rationale: >-
+      Weekend shopping is normal consumer behaviour; for a card group with an established history
+      a weekend transaction is not by itself suspicious. Small discount only. Weekend depends on
+      the reference-date assumption (2017-12-01).
+
+  - id: C4
+    group: C4
+    name: trusted_entity
+    description: >-
+      >= 20 previous transactions, |amt_zscore_ent| <= 2 and the device or e-mail domain was
+      already used by this entity before.
+    type: multiplicative
+    factor: 0.75
+    condition:
+      all:
+        - {feature: ent_txn_count, op: ">=", value: 20}
+        - {feature: abs_amt_zscore_ent, op: "<=", value: 2.0}
+        - {feature: known_device_or_email, op: "==", value: 1}
+    rationale: >-
+      A long history, an amount inside the entity's own normal range and a familiar device/e-mail
+      together describe a returning customer behaving as usual; this is the main false-positive
+      source of anomaly models (rare-but-normal customers). Strongest discount, still bounded and
+      overridden by the card-testing guard.
+
+  - id: C5
+    group: C5
+    name: frequent_entity_temporal_weight
+    description: >-
+      Established frequent entity whose last-24h count does not exceed 3x its own historical daily
+      average: the temporal layer weight is halved and the Step 5 aggregate is recomputed.
+    type: layer_weight
+    layer: temporal
+    weight_multiplier: 0.5
+    only_if_lowers: true
+    condition:
+      all:
+        - {feature: ent_txn_count, op: ">=", value: 5}
+        - {feature: ent_daily_avg, op: ">=", value: 1.0}
+        - {feature: burst_ratio_24h, op: "<=", value: 3.0}
+    rationale: >-
+      Step 5 finding: 96% of the temporal top 1% was the burst of a single high-volume card group.
+      For an entity that always transacts often, a high velocity is its normal rhythm, not a
+      change; the temporal layer then carries little information and is down-weighted. A real
+      change (more than 3x its own daily average) keeps the full weight.
+
+  - id: C6a
+    group: C6
+    name: foreign_country
+    description: addr2 present and different from the dominant fit addr2 (87, assumed US).
+    type: multiplicative
+    factor: 1.20
+    condition:
+      all:
+        - {feature: addr2, op: notna}
+        - {feature: addr2, op: "!=", value: {param: dominant_addr2}}
+    rationale: >-
+      Cross-border transactions are a classic risk factor (card used outside its home market).
+      addr2 = 87 = US is a community interpretation (assumption 3).
+
+  - id: C6b
+    group: C6
+    name: missing_country_converted_amount
+    description: addr2 missing and the amount has 3 decimals (possible currency conversion).
+    type: multiplicative
+    factor: 1.10
+    condition:
+      all:
+        - {feature: addr2, op: isna}
+        - {feature: amt_has_3dec, op: "==", value: 1}
+    rationale: >-
+      No billing country plus a converted amount suggests a foreign transaction whose origin we
+      cannot verify; smaller boost than C6a because both signals are interpretations (assumption 7).
+
+  - id: C7
+    group: C7
+    name: holiday_season_volume
+    description: >-
+      holiday_season (learned 2017-12-19..2017-12-26) and the temporal layer is the dominant
+      contribution (volume/velocity-driven score).
+    type: multiplicative
+    factor: 0.90
+    condition:
+      all:
+        - {feature: holiday_season, op: "==", value: 1}
+        - {feature: dominant_layer, op: "==", value: temporal}
+    rationale: >-
+      In the holiday peak everybody buys more often; velocity and volume alerts are expected to
+      fire more and are partly seasonal noise. Only scores driven mainly by the temporal layer
+      (largest weighted contribution) are discounted; amount or device anomalies are untouched.
+
+  - id: C8
+    group: C8
+    name: new_card_high_amount
+    description: New card (D1 = card_age_days = 0) with amount >= fit q90.
+    type: multiplicative
+    factor: 1.15
+    condition:
+      all:
+        - {feature: card_age_days, op: "==", value: 0}
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+    rationale: >-
+      A large purchase on the first day of a card is a known bust-out / stolen-card pattern; a
+      genuine new customer usually starts small. D1 = card age is a data-supported assumption (5).
+
+  - id: C9a
+    group: C9
+    name: product_c
+    description: ProductCD = C.
+    type: multiplicative
+    factor: 1.10
+    condition:
+      all:
+        - {feature: ProductCD, op: "==", value: C}
+    rationale: >-
+      Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online
+      identity/device data and mostly (95%) without a billing country, i.e. a card-not-present,
+      likely cross-border digital channel where goods are delivered instantly and resale is easy.
+      Small base factor. The EDA fit table (docs/eda.md) was used only as a plausibility check,
+      not to choose the value.
+
+  - id: C9b
+    group: C9
+    name: product_w
+    description: ProductCD = W.
+    type: multiplicative
+    factor: 0.95
+    condition:
+      all:
+        - {feature: ProductCD, op: "==", value: W}
+    rationale: >-
+      Business logic: W is the mainstream product (74.5% of rows); the anomaly layers' notion of
+      normal is calibrated mostly on it, so small tolerance. EDA used only as a plausibility check.

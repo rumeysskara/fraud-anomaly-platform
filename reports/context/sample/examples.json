@@ -1,0 +1,109 @@
+{
+  "3032741":{
+    "raw_score":0.8640616006,
+    "adjusted_score":1.0,
+    "adjustment_total":1.188,
+    "applied_adjustments":[
+      {
+        "id":"C1",
+        "name":"business_hours_known_entity",
+        "factor":0.9,
+        "reason":"Most legitimate card-present and online shopping happens in local working hours; a card group we have seen before transacting at that time is the least surprising case. Local hour is an estimate (K-06, offset -6 h) and weekday uses the reference calendar (assumption 4)."
+      },
+      {
+        "id":"C6a",
+        "name":"foreign_country",
+        "factor":1.2,
+        "reason":"Cross-border transactions are a classic risk factor (card used outside its home market). addr2 = 87 = US is a community interpretation (assumption 3)."
+      },
+      {
+        "id":"C9a",
+        "name":"product_c",
+        "factor":1.1,
+        "reason":"Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online identity\/device data and mostly (95%) without a billing country, i.e. a card-not-present, likely cross-border digital channel where goods are delivered instantly and resale is easy. Small base factor. The EDA fit table (docs\/eda.md) was used only as a plausibility check, not to choose the value."
+      }
+    ]
+  },
+  "3035602":{
+    "raw_score":0.9792661636,
+    "adjusted_score":1.0,
+    "adjustment_total":1.15,
+    "applied_adjustments":[
+      {
+        "id":"C2",
+        "name":"low_volume_high_amount",
+        "factor":1.15,
+        "reason":"Large purchases in the hours when few customers are active are a common account-takeover pattern (fraudster acts while the owner sleeps). Only high amounts are boosted so that ordinary night activity is not penalized."
+      }
+    ]
+  },
+  "3030625":{
+    "raw_score":0.9746323778,
+    "adjusted_score":1.0,
+    "adjustment_total":1.32,
+    "applied_adjustments":[
+      {
+        "id":"C6a",
+        "name":"foreign_country",
+        "factor":1.2,
+        "reason":"Cross-border transactions are a classic risk factor (card used outside its home market). addr2 = 87 = US is a community interpretation (assumption 3)."
+      },
+      {
+        "id":"C9a",
+        "name":"product_c",
+        "factor":1.1,
+        "reason":"Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online identity\/device data and mostly (95%) without a billing country, i.e. a card-not-present, likely cross-border digital channel where goods are delivered instantly and resale is easy. Small base factor. The EDA fit table (docs\/eda.md) was used only as a plausibility check, not to choose the value."
+      }
+    ]
+  },
+  "3032697":{
+    "raw_score":0.866451496,
+    "adjusted_score":1.0,
+    "adjustment_total":1.188,
+    "applied_adjustments":[
+      {
+        "id":"C1",
+        "name":"business_hours_known_entity",
+        "factor":0.9,
+        "reason":"Most legitimate card-present and online shopping happens in local working hours; a card group we have seen before transacting at that time is the least surprising case. Local hour is an estimate (K-06, offset -6 h) and weekday uses the reference calendar (assumption 4)."
+      },
+      {
+        "id":"C6a",
+        "name":"foreign_country",
+        "factor":1.2,
+        "reason":"Cross-border transactions are a classic risk factor (card used outside its home market). addr2 = 87 = US is a community interpretation (assumption 3)."
+      },
+      {
+        "id":"C9a",
+        "name":"product_c",
+        "factor":1.1,
+        "reason":"Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online identity\/device data and mostly (95%) without a billing country, i.e. a card-not-present, likely cross-border digital channel where goods are delivered instantly and resale is easy. Small base factor. The EDA fit table (docs\/eda.md) was used only as a plausibility check, not to choose the value."
+      }
+    ]
+  },
+  "3035588":{
+    "raw_score":0.9140940597,
+    "adjusted_score":1.0,
+    "adjustment_total":1.256375,
+    "applied_adjustments":[
+      {
+        "id":"C2",
+        "name":"low_volume_high_amount",
+        "factor":1.15,
+        "reason":"Large purchases in the hours when few customers are active are a common account-takeover pattern (fraudster acts while the owner sleeps). Only high amounts are boosted so that ordinary night activity is not penalized."
+      },
+      {
+        "id":"C8",
+        "name":"new_card_high_amount",
+        "factor":1.15,
+        "reason":"A large purchase on the first day of a card is a known bust-out \/ stolen-card pattern; a genuine new customer usually starts small. D1 = card age is a data-supported assumption (5)."
+      },
+      {
+        "id":"C9b",
+        "name":"product_w",
+        "factor":0.95,
+        "reason":"Business logic: W is the mainstream product (74.5% of rows); the anomaly layers' notion of normal is calibrated mostly on it, so small tolerance. EDA used only as a plausibility check."
+      }
+    ]
+  }
+}
