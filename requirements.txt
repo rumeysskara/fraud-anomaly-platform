@@ -1,0 +1,19 @@
+# Kurulumdan sonra tekrar üretilebilirlik için: pip freeze > requirements.lock
+pandas
+pyarrow
+numpy
+scipy
+scikit-learn
+joblib
+pyyaml
+pydantic>=2
+fastapi
+uvicorn[standard]
+dependency-injector
+faiss-cpu
+ollama
+httpx
+matplotlib
+pytest
+ruff
+black
