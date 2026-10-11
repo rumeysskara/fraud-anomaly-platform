@@ -1,0 +1,13 @@
+id,name,priority,severity,decision,risk_boost,fit_hits,fit_share,fit_applied,fit_suppressed,fit_winner,holdout_hits,holdout_share,holdout_applied,holdout_suppressed,holdout_winner
+R01,card_testing,1,critical,block,0.3,220,0.0055,220,0,220,49,0.0049,49,0,49
+R02,high_amount_foreign_low_volume,1,critical,block,0.3,0,0.0,0,0,0,0,0.0,0,0,0
+R03,velocity_burst,2,high,review,0.15,2,5e-05,1,1,1,0,0.0,0,0,0
+R04,new_card_high_amount,2,high,review,0.15,1252,0.0313,1252,0,1252,401,0.0401,401,0,401
+R05,high_amount_foreign,2,high,review,0.15,0,0.0,0,0,0,2,0.0002,2,0,0
+R06,amount_deviation,3,medium,review,0.08,306,0.00765,306,0,128,128,0.0128,128,0,51
+R07,first_transaction_high_amount,3,medium,review,0.08,581,0.014525,581,0,191,109,0.0109,109,0,22
+R08,no_identity_high_amount,3,medium,review,0.08,2,5e-05,2,0,0,0,0.0,0,0,0
+R09,email_mismatch_high_amount,4,low,review,0.03,34,0.00085,34,0,2,37,0.0037,37,0,2
+R10,trusted_entity_allow,5,low,allow,0.0,0,0.0,0,0,0,0,0.0,0,0,0
+R11,converted_amount_no_country_high_amount,3,medium,review,0.08,0,0.0,0,0,0,0,0.0,0,0,0
+R12,holiday_new_card_high_amount,3,medium,review,0.08,0,0.0,0,0,0,0,0.0,0,0,0

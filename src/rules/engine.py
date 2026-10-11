@@ -15,10 +15,11 @@ from pydantic import Field
 from src.core.interfaces import RuleEvaluator
 from src.core.types import Explanation, RuleResult
 from src.rules.conditions import evaluate_condition, resolve_value
+from src.rules.cooldown import CooldownStore, apply_cooldown, cooldown_keys
 from src.rules.derive import DERIVED_DEPS, add_derived
 from src.rules.explain import render_message, to_python
 from src.rules.repository import RuleRepository, RuleSettings
-from src.rules.resolver import Resolution, resolve
+from src.rules.resolver import ALLOW_VS_SCORE_REASON, Resolution, resolve
 from src.rules.schema import Rule, condition_features, template_fields
 
 ANOMALY = "anomaly_score"  # Step 5 anomaly_score_norm (display only)
@@ -28,6 +29,7 @@ FINAL = "final_score"
 FINAL_UNCLIPPED = "final_score_unclipped"
 SCORE_COLUMNS = [ANOMALY, ADJUSTED, ADJUSTED_UNCLIPPED]
 HIT_PREFIX = "hit_"
+COOLDOWN_REASON = "cooldown: aynı entity için son {window} sn içinde zaten tetiklendi"
 
 
 class RuleEngineResult(RuleResult):
@@ -68,9 +70,16 @@ class RuleEngineResult(RuleResult):
 class RuleEngine(RuleEvaluator):
     """Applies the repository's rules (or a request-time rule set) with learned thresholds."""
 
-    def __init__(self, repository: RuleRepository, params: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        repository: RuleRepository,
+        params: dict[str, Any],
+        cooldown_store: CooldownStore | None = None,
+    ) -> None:
         self.repository = repository
         self.params = dict(params)
+        # online cooldown state (batch runs always start from a fresh store)
+        self.cooldown_store = cooldown_store if cooldown_store is not None else CooldownStore()
 
     @property
     def settings(self) -> RuleSettings:
@@ -90,6 +99,8 @@ class RuleEngine(RuleEvaluator):
         needed: set[str] = set()
         for name in names:
             needed |= set(DERIVED_DEPS.get(name, [name]))
+        if any(r.cooldown for r in rules):
+            needed |= set(self.settings.cooldown_columns)
         return sorted(needed)
 
     # ---- shared core (batch and online) ----
@@ -97,6 +108,31 @@ class RuleEngine(RuleEvaluator):
         """Boolean frame (rows of df x rule ids): did the rule's condition hold?"""
         data = {r.id: evaluate_condition(r.condition, df, self.params) for r in rules}
         return pd.DataFrame(data, index=df.index, columns=[r.id for r in rules], dtype=bool)
+
+    def apply_cooldowns(
+        self, frame: pd.DataFrame, hits: pd.DataFrame, rules: list[Rule], store: CooldownStore
+    ) -> tuple[pd.DataFrame, list[list[str]]]:
+        """Drop hits of cooldown rules whose entity already fired within the window.
+
+        Returns the kept hits and, per row, the ids removed by a cooldown. Same code for batch
+        (fresh store, rows in time order) and online (engine's store).
+        """
+        cooled: list[list[str]] = [[] for _ in range(len(hits))]
+        cool_rules = [r for r in rules if r.cooldown is not None]
+        if not cool_rules:
+            return hits, cooled
+        hits = hits.copy()
+        times = frame[self.settings.time_column].to_numpy("float64")
+        keys = cooldown_keys(frame, self.settings.entity_columns)
+        for rule in cool_rules:
+            raw = hits[rule.id].to_numpy(dtype=bool)
+            kept = apply_cooldown(
+                raw, times, keys, rule.cooldown.window_seconds, store.for_rule(rule.id)
+            )
+            hits[rule.id] = kept
+            for i in np.flatnonzero(raw & ~kept):
+                cooled[i].append(rule.id)
+        return hits, cooled
 
     def score_review_threshold(self) -> float | None:
         """Score-based review threshold, or None when disabled."""
@@ -142,7 +178,22 @@ class RuleEngine(RuleEvaluator):
         undecided = decision.isna()
         threshold = self.score_review_threshold()
         if threshold is not None:
-            by_score = undecided & (out[FINAL_UNCLIPPED] >= threshold)
+            # the score is compared before any rule boost; an allow rule cannot override a
+            # score-threshold review (resolver rule 4), so its effect is undone on those rows
+            over = base >= threshold
+            allow_lost = (decision == "allow") & over
+            applied, lost_ids = list(out["applied_rules"]), list(out["suppressed_rules"])
+            reasons = list(out["suppressed_reasons"])
+            for i in np.flatnonzero(allow_lost.to_numpy()):
+                lost_ids[i] = [*lost_ids[i], *applied[i]]
+                reasons[i] = [*reasons[i], *[ALLOW_VS_SCORE_REASON] * len(applied[i])]
+                applied[i] = []
+            out["applied_rules"], out["suppressed_rules"] = applied, lost_ids
+            out["suppressed_reasons"] = reasons
+            out.loc[allow_lost, ["boost_raw", "boost"]] = 0.0
+            out[FINAL_UNCLIPPED] = base + out["boost"]
+            out[FINAL] = out[FINAL_UNCLIPPED].clip(s.clip_min, s.clip_max)
+            by_score = (undecided | allow_lost) & over
             decision[by_score], source[by_score] = "review", "score"
             undecided &= ~by_score
         decision[undecided], source[undecided] = s.default_decision, "default"
@@ -161,8 +212,10 @@ class RuleEngine(RuleEvaluator):
         rules = self.active_rules(rules)
         frame = add_derived(df.join(scores[SCORE_COLUMNS]), self.settings.daily_avg_min_days)
         hits = self.hit_matrix(frame, rules)
+        hits, cooled = self.apply_cooldowns(frame, hits, rules, CooldownStore())
         decided = self.decide(hits, rules, frame[ADJUSTED_UNCLIPPED])
         out = frame[SCORE_COLUMNS].join(decided)
+        out["cooldown_rules"] = cooled
         for rid in hits.columns:
             out[f"{HIT_PREFIX}{rid}"] = hits[rid].astype("int8")
         return out
@@ -173,6 +226,7 @@ class RuleEngine(RuleEvaluator):
         record: dict[str, Any],
         anomaly_score: float,
         rules: list[Rule] | list[dict[str, Any]] | str | None = None,
+        update_state: bool = True,
     ) -> RuleEngineResult:
         """Evaluate one record.
 
@@ -180,6 +234,8 @@ class RuleEngine(RuleEvaluator):
         The record may carry `anomaly_score` (Step 5) and `adjusted_score` (clipped) for display.
         rules: optional request-time rule set (Rule objects, dicts or JSON text); it is validated
         with the same schema and used only for this call.
+        update_state: record this call's fires in the cooldown store (False = read only).
+        Cooldown rules need the record's TransactionDT and entity columns.
         """
         if rules is not None and not all(isinstance(r, Rule) for r in rules):
             rules = self.repository.parse(rules)  # type: ignore[arg-type]
@@ -196,11 +252,17 @@ class RuleEngine(RuleEvaluator):
         }
         frame = add_derived(pd.DataFrame([{**row, **scores}]), s.daily_avg_min_days)
         hits = self.hit_matrix(frame, active)
+        store = self.cooldown_store if update_state else self.cooldown_store.copy()
+        hits, cooled = self.apply_cooldowns(frame, hits, active, store)
         decided = self.decide(hits, active, frame[ADJUSTED_UNCLIPPED]).iloc[0]
-        return self._result(frame.iloc[0].to_dict(), decided, active)
+        return self._result(frame.iloc[0].to_dict(), decided, active, cooled[0])
 
     def _result(
-        self, values: dict[str, Any], decided: pd.Series, rules: list[Rule]
+        self,
+        values: dict[str, Any],
+        decided: pd.Series,
+        rules: list[Rule],
+        cooled: list[str] | None = None,
     ) -> RuleEngineResult:
         by_id = {r.id: r for r in rules}
         fill = {**values, **self.params}
@@ -230,6 +292,15 @@ class RuleEngine(RuleEvaluator):
                 decided["suppressed_rules"], decided["suppressed_reasons"], strict=True
             )
         ]
+        for rid in cooled or []:
+            window = by_id[rid].cooldown.window_seconds  # type: ignore[union-attr]
+            suppressed.append(
+                {
+                    "id": rid,
+                    "reason": COOLDOWN_REASON.format(window=window),
+                    "message": render_message(by_id[rid].message, fill),
+                }
+            )
         anomaly = to_python(values.get(ANOMALY))
         return RuleEngineResult(
             action=str(decided["final_decision"]),

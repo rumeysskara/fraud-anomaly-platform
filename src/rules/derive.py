@@ -48,19 +48,21 @@ def build_batch_inputs(
     merged: pd.DataFrame,
     feature_cols: list[str],
     raw_cols: list[str],
+    key_cols: list[str] | None = None,
 ) -> pd.DataFrame:
     """Rule input indexed by TransactionID: features + raw fields + past-only email_ent_known.
 
-    merged must contain raw_cols and the Step 6 email source columns (RAW_SOURCE_COLUMNS).
+    merged must contain raw_cols, key_cols (cooldown time + entity columns) and the Step 6 email
+    source columns (RAW_SOURCE_COLUMNS).
     """
     merged = merged.loc[features.index]
     out = features[feature_cols].copy()
-    for col in raw_cols:
+    for col in [*raw_cols, *(key_cols or [])]:
         out[col] = merged[col]
     out[EMAIL_KNOWN] = email_known_batch(merged[RAW_SOURCE_COLUMNS])
     return out
 
 
-def merged_columns(raw_cols: list[str]) -> list[str]:
+def merged_columns(raw_cols: list[str], key_cols: list[str] | None = None) -> list[str]:
     """Columns to read from merged.parquet for build_batch_inputs."""
-    return list(dict.fromkeys([*RAW_SOURCE_COLUMNS, *raw_cols]))
+    return list(dict.fromkeys([*RAW_SOURCE_COLUMNS, *raw_cols, *(key_cols or [])]))

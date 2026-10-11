@@ -90,6 +90,15 @@ class Action(BaseModel):
     flag: str = Field(min_length=1)
 
 
+class Cooldown(BaseModel):
+    """The rule fires at most once per entity within window_seconds (past-only)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    window_seconds: int = Field(ge=1)
+    key: Literal["entity"] = "entity"
+
+
 class Rule(BaseModel):
     """One configurable rule (configs/rules.yaml or a JSON file / request payload)."""
 
@@ -105,6 +114,7 @@ class Rule(BaseModel):
     message: str = Field(min_length=1)
     tags: list[str] = Field(default_factory=list)
     enabled: bool = True
+    cooldown: Cooldown | None = None
 
     @field_validator("message")
     @classmethod

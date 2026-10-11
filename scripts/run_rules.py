@@ -5,8 +5,8 @@ Reads data/processed/features[_sample].parquet, merged[_sample].parquet and the 
 (reports/scores/adjusted_score.parquet; sample: reports/context/sample/adjusted_score.parquet).
 Thresholds are learned on the FIT rows only. Full data: written to the `learned:` block of
 configs/rules.yaml (the API reads them from there); SAMPLE_N runs: reports/rules/sample/.
-The label is read ONLY in evaluate_holdout(), via the loader and src.evaluation.metrics; rules,
-thresholds and boosts never see it. Use --no-eval to skip evaluation.
+Labelled metrics are computed only in src/evaluation (rule_metrics, metrics); this script passes
+label-free masks and scores to them in evaluate(). Use --no-eval to skip evaluation.
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from src.core.config import (  # noqa: E402
     set_seed,
 )
 from src.data.loader import split_by_time  # noqa: E402
+from src.rules.cooldown import CooldownStore, cooldown_keys  # noqa: E402
 from src.rules.derive import build_batch_inputs, merged_columns  # noqa: E402
 from src.rules.engine import (  # noqa: E402
     ADJUSTED,
@@ -62,14 +63,25 @@ from src.rules.repository import RuleRepository  # noqa: E402
 
 log = logging.getLogger("run_rules")
 RAW_TIEBREAK = "raw_anomaly_score"
+# label-free conditions whose lift is broken down by ProductCD in the EDA consistency check
+EDA_CONDITIONS = {
+    "foreign_addr2 = 1": ("foreign_addr2", 1),
+    "card_age_days = 0 (new card)": ("card_age_days", 0),
+    "is_low_volume_window = 1": ("is_low_volume_window", 1),
+    "email_mismatch = 1": ("email_mismatch", 1),
+    "has_identity = 0": ("has_identity", 0),
+}
+EDA_GROUP = "ProductCD"
 
 
 def load_inputs(sfx: str, sample: bool, repo: RuleRepository) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Rule inputs and Step 5/6 scores, both indexed by TransactionID."""
-    inp = repo.settings.inputs
+    """Rule inputs (incl. cooldown time + entity columns) and Step 5/6 scores by TransactionID."""
+    s = repo.settings
+    inp = s.inputs
     feats = pd.read_parquet(PROCESSED_DIR / f"features{sfx}.parquet", columns=inp["features"])
     merged = pd.read_parquet(
-        PROCESSED_DIR / f"merged{sfx}.parquet", columns=merged_columns(inp["raw"])
+        PROCESSED_DIR / f"merged{sfx}.parquet",
+        columns=merged_columns(inp["raw"], s.cooldown_columns),
     )
     path = REPORTS_DIR / ("context/sample" if sample else "scores") / "adjusted_score.parquet"
     adj = pd.read_parquet(path)
@@ -81,8 +93,7 @@ def load_inputs(sfx: str, sample: bool, repo: RuleRepository) -> tuple[pd.DataFr
             RAW_TIEBREAK: adj[RAW_TIEBREAK],
         }
     ).loc[feats.index]
-    inputs = build_batch_inputs(feats, merged, inp["features"], inp["raw"])
-    inputs["TransactionDT"] = merged.loc[feats.index, "TransactionDT"]
+    inputs = build_batch_inputs(feats, merged, inp["features"], inp["raw"], s.cooldown_columns)
     return inputs, scores
 
 
@@ -104,127 +115,137 @@ def learn_params(
     return {**learned, **external}
 
 
-def online_check(engine: RuleEngine, inputs: pd.DataFrame, result: pd.DataFrame, ids: list) -> int:
-    """Re-evaluate rows through the single-record path; return the number of mismatches."""
-    bad = 0
-    for tid in ids:
-        record = record_of(inputs, result, tid)
-        one = engine.evaluate(record, float(result.at[tid, ADJUSTED_UNCLIPPED]))
-        same = (
-            one.final_decision == result.at[tid, "final_decision"]
-            and one.triggered_rules == list(result.at[tid, "triggered_rules"])
-            and math.isclose(one.final_score_unclipped, result.at[tid, FINAL_UNCLIPPED])
+class OnlineReplay:
+    """Single-record re-evaluation of batch rows with the cooldown state the online path would
+    have at that moment (last kept fire of the entity strictly before the row)."""
+
+    def __init__(self, engine: RuleEngine, inputs: pd.DataFrame, result: pd.DataFrame) -> None:
+        s = engine.settings
+        self.engine, self.inputs, self.result = engine, inputs, result
+        times = inputs[s.time_column].to_numpy("float64")
+        pos = np.empty(len(times), dtype=np.int64)
+        pos[np.argsort(times, kind="stable")] = np.arange(len(times))  # apply_cooldown order
+        keys = cooldown_keys(inputs, s.entity_columns)
+        self.state = pd.DataFrame({"time": times, "pos": pos, "key": keys}, index=inputs.index)
+        self.fires = {
+            r.id: self.state[result[f"{HIT_PREFIX}{r.id}"].to_numpy() == 1]
+            for r in engine.active_rules()
+            if r.cooldown is not None
+        }
+
+    def store_for(self, tid: int) -> CooldownStore:
+        """Cooldown state just before row tid."""
+        store = CooldownStore()
+        me = self.state.loc[tid]
+        for rid, fires in self.fires.items():
+            prior = fires[(fires["key"] == me["key"]) & (fires["pos"] < me["pos"])]
+            if not prior.empty:
+                store.set(rid, me["key"], prior.loc[prior["pos"].idxmax(), "time"])
+        return store
+
+    def evaluate(self, tid: int):  # noqa: ANN201 - RuleEngineResult
+        """Online result for row tid."""
+        record = self.inputs.loc[tid].to_dict()
+        record[ANOMALY] = float(self.result.at[tid, ANOMALY])
+        record[ADJUSTED] = float(self.result.at[tid, ADJUSTED])
+        self.engine.cooldown_store = self.store_for(tid)
+        return self.engine.evaluate(
+            record, float(self.result.at[tid, ADJUSTED_UNCLIPPED]), update_state=False
         )
-        bad += not same
-    return bad
+
+    def mismatches(self, ids: list) -> int:
+        """Rows where the online path disagrees with the batch output."""
+        bad = 0
+        for tid in ids:
+            one = self.evaluate(tid)
+            same = (
+                one.final_decision == self.result.at[tid, "final_decision"]
+                and one.triggered_rules == list(self.result.at[tid, "triggered_rules"])
+                and math.isclose(one.final_score_unclipped, self.result.at[tid, FINAL_UNCLIPPED])
+            )
+            bad += not same
+        return bad
 
 
-def record_of(inputs: pd.DataFrame, result: pd.DataFrame, tid: int) -> dict:
-    """One input row as an API-like record (with the display scores)."""
-    record = inputs.loc[tid].to_dict()
-    record[ANOMALY] = float(result.at[tid, ANOMALY])
-    record[ADJUSTED] = float(result.at[tid, ADJUSTED])
-    return record
-
-
-def evaluate_holdout(result: pd.DataFrame, engine: RuleEngine, hold: pd.Index, out: Path) -> None:
-    """Rule precision/lift, decision metrics, budget comparison and ablation; the only place y
-    is read (loader + src.evaluation.metrics). Nothing here changes a rule or threshold."""
+def evaluate(
+    result: pd.DataFrame,
+    inputs: pd.DataFrame,
+    engine: RuleEngine,
+    parts: dict[str, pd.Index],
+    out: Path,
+) -> None:
+    """Holdout report + fit/holdout EDA consistency check. Labels are read through the loader and
+    used only inside src.evaluation functions. Nothing here changes a rule or threshold."""
     from src.data.loader import load_data
-    from src.evaluation.metrics import evaluate
+    from src.evaluation.rule_metrics import (
+        budget_table,
+        decision_metrics,
+        lift_by_group,
+        rule_hit_metrics,
+    )
 
     budgets = load_settings()["evaluation"]["alarm_budgets"]
-    _, y = load_data()
+    _, y_all = load_data()
+    rules = engine.active_rules()
+    ids = [r.id for r in rules]
+    hits = result[[f"{HIT_PREFIX}{rid}" for rid in ids]].set_axis(ids, axis=1).astype(bool)
+    applied = pd.DataFrame(
+        {rid: result["applied_rules"].map(lambda x, r=rid: r in x) for rid in ids}
+    )
+    hold = parts["holdout"]
     # stable top-k: equal scores are ranked by the unnormalized Step 5 score (as in Step 6)
-    y_hold = y.loc[tie_break_order(result.loc[hold, RAW_TIEBREAK])]
-    base = float(y_hold.mean())
-    res = result.loc[y_hold.index]
+    y_hold = y_all.loc[tie_break_order(result.loc[hold, RAW_TIEBREAK])]
     log.info("holdout rows %s, positives %s", len(y_hold), int(y_hold.sum()))
 
-    rows = []
-    for col in [c for c in res.columns if c.startswith(HIT_PREFIX)]:
-        rid = col[len(HIT_PREFIX) :]
-        hit = res[col] == 1
-        applied = res["applied_rules"].map(lambda x, r=rid: r in x)
-        prec = float(y_hold[hit].mean()) if hit.any() else float("nan")
-        rows.append(
-            {
-                "id": rid,
-                "hits": int(hit.sum()),
-                "coverage": float(hit.mean()),
-                "tp": int(y_hold[hit].sum()),
-                "precision": prec,
-                "lift": prec / base if hit.any() else float("nan"),
-                "applied": int(applied.sum()),
-                "precision_applied": (
-                    float(y_hold[applied].mean()) if applied.any() else float("nan")
-                ),
-            }
-        )
-    pd.DataFrame(rows).to_csv(out / "rule_metrics.csv", index=False)
-
-    dec = res.groupby("final_decision").size().rename("rows").to_frame()
-    dec["tp"] = y_hold.groupby(res["final_decision"]).sum()
-    dec["fp"] = dec["rows"] - dec["tp"]
-    dec["precision"] = dec["tp"] / dec["rows"]
-    dec["lift"] = dec["precision"] / base
-    dec.reset_index().to_csv(out / "decision_metrics.csv", index=False)
-
-    def ev(score: pd.Series) -> dict[str, float]:
-        return evaluate(y_hold, score.loc[y_hold.index], budgets)
-
-    comp = []
-    for name, col in (
-        ("step5 (anomaly_score_norm)", ANOMALY),
-        ("step6 (adjusted_score_unclipped)", ADJUSTED_UNCLIPPED),
-        ("step7 (final_score_unclipped)", FINAL_UNCLIPPED),
-    ):
-        m = ev(result[col])
-        for b in budgets:
-            k = math.ceil(b * len(y_hold))
-            comp.append(
-                {
-                    "budget": b,
-                    "score": name,
-                    "alarms": k,
-                    "tp": k - int(m[f"fp@{b}"]),
-                    "fp": int(m[f"fp@{b}"]),
-                    "precision": m[f"precision@{b}"],
-                    "recall": m[f"recall@{b}"],
-                    "pr_auc": m["pr_auc"],
-                    "roc_auc": m["roc_auc"],
-                }
-            )
-    table = pd.DataFrame(comp).sort_values("budget", kind="stable")
+    rule_hit_metrics(y_hold, hits, applied).to_csv(out / "rule_metrics.csv", index=False)
+    decision_metrics(y_hold, result["final_decision"]).to_csv(
+        out / "decision_metrics.csv", index=False
+    )
+    scores = {
+        "step5 (anomaly_score_norm)": result[ANOMALY],
+        "step6 (adjusted_score_unclipped)": result[ADJUSTED_UNCLIPPED],
+        "step7 (final_score_unclipped)": result[FINAL_UNCLIPPED],
+    }
+    table = budget_table(y_hold, scores, budgets)
     table.to_csv(out / "budget_comparison.csv", index=False)
     log.info("budget comparison\n%s", table.to_string(index=False))
 
-    # leave-one-rule-out on the final score (same hits, one rule removed before resolution)
-    rules = engine.active_rules()
-    hit_cols = [f"{HIT_PREFIX}{r.id}" for r in rules]
-    hits = res[hit_cols].astype(bool).set_axis([r.id for r in rules], axis=1)
-    abl = []
+    # leave-one-rule-out: same hits, one rule removed before resolution (label-free scores)
+    res = result.loc[y_hold.index]
+    variants = {}
     for rule in [None, *rules]:
         keep = [r for r in rules if rule is None or r.id != rule.id]
-        decided = engine.decide(hits[[r.id for r in keep]], keep, res[ADJUSTED_UNCLIPPED])
-        m = ev(decided[FINAL_UNCLIPPED])
-        row = {"variant": "all rules" if rule is None else f"without {rule.id}"}
-        row["pr_auc"] = m["pr_auc"]
-        for b in budgets:
-            row[f"precision@{b}"] = m[f"precision@{b}"]
-            row[f"fp@{b}"] = int(m[f"fp@{b}"])
-        row["review_or_block_rows"] = int(decided["final_decision"].isin(["review", "block"]).sum())
-        abl.append(row)
-    pd.DataFrame(abl).to_csv(out / "rule_ablation.csv", index=False)
-    pd.DataFrame([{"n": len(y_hold), "positives": int(y_hold.sum()), "base_rate": base}]).to_csv(
-        out / "holdout_base.csv", index=False
+        decided = engine.decide(
+            hits.loc[res.index, [r.id for r in keep]], keep, res[ADJUSTED_UNCLIPPED]
+        )
+        variants["all rules" if rule is None else f"without {rule.id}"] = decided[FINAL_UNCLIPPED]
+    abl = budget_table(y_hold, variants, budgets)
+    abl.to_csv(out / "rule_ablation.csv", index=False)
+    pd.DataFrame(
+        [{"n": len(y_hold), "positives": int(y_hold.sum()), "base_rate": float(y_hold.mean())}]
+    ).to_csv(out / "holdout_base.csv", index=False)
+
+    # EDA consistency check: the same metrics on FIT rows next to holdout (not used for design)
+    side = []
+    for part, idx in parts.items():
+        m = rule_hit_metrics(y_all.loc[idx], hits).set_index("id")
+        side.append(m[["hits", "coverage", "precision", "lift"]].add_prefix(f"{part}_"))
+    pd.concat(side, axis=1).reset_index().to_csv(out / "eda_fit_vs_holdout.csv", index=False)
+    masks = pd.DataFrame(
+        {name: inputs[col].astype("float64") == val for name, (col, val) in EDA_CONDITIONS.items()}
     )
+    masks = masks.join(hits.add_prefix("rule "))
+    by_product = [
+        lift_by_group(y_all.loc[idx], masks, inputs[EDA_GROUP]).assign(part=part)
+        for part, idx in parts.items()
+    ]
+    pd.concat(by_product, ignore_index=True).to_csv(out / "eda_lift_by_product.csv", index=False)
 
 
 def main() -> int:
     """Run Step 7."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--no-eval", action="store_true", help="skip holdout evaluation")
+    parser.add_argument("--no-eval", action="store_true", help="skip labelled evaluation")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     set_seed()
@@ -236,12 +257,11 @@ def main() -> int:
 
     repo = RuleRepository(CONFIG_DIR / "rules.yaml")
     inputs, scores = load_inputs(sfx, sample, repo)
-    fit_part, hold_part = split_by_time(inputs[["TransactionDT"]])
-    fit_idx, hold_idx = fit_part.index, hold_part.index
-    inputs = inputs.drop(columns="TransactionDT")
-    log.info("rows %s (fit %s, holdout %s)", len(inputs), len(fit_idx), len(hold_idx))
+    fit_part, hold_part = split_by_time(inputs[[repo.settings.time_column]])
+    parts = {"fit": fit_part.index, "holdout": hold_part.index}
+    log.info("rows %s (fit %s, holdout %s)", len(inputs), len(fit_part), len(hold_part))
 
-    fit_frame = inputs.loc[fit_idx].join(scores.loc[fit_idx])
+    fit_frame = inputs.loc[parts["fit"]].join(scores.loc[parts["fit"]])
     params = learn_params(repo, fit_frame, sample, out)
     del fit_frame
     engine = RuleEngine(repo, params)
@@ -253,8 +273,8 @@ def main() -> int:
     result.to_parquet(out / "rule_hits.parquet")
     log.info("wrote %s", out / "rule_hits.parquet")
 
-    parts = {"fit": fit_idx, "holdout": hold_idx}
-    rule_coverage(result, rules, parts).to_csv(out / "rule_coverage.csv", index=False)
+    entity = pd.Series(cooldown_keys(inputs, repo.settings.entity_columns), index=inputs.index)
+    rule_coverage(result, rules, parts, entity).to_csv(out / "rule_coverage.csv", index=False)
     decision_distribution(result, parts).to_csv(out / "decision_distribution.csv", index=False)
     pd.concat(
         [conflict_summary(result, idx).assign(part=p) for p, idx in parts.items()],
@@ -264,31 +284,35 @@ def main() -> int:
         [boost_summary(result, idx).assign(part=p) for p, idx in parts.items()], ignore_index=True
     ).to_csv(out / "score_effect.csv", index=False)
 
+    replay = OnlineReplay(engine, inputs, result)
     allow_ids = {r.id for r in rules if r.action.decision == "allow"}
     examples = {}
     # conflicts are rare (high-amount and small-amount rules exclude each other), so examples are
     # picked label-free from all rows; `part` tells where the row comes from
-    for tid in pick_conflict_examples(result, result.index, allow_ids, n=4):
-        one = engine.evaluate(
-            record_of(inputs, result, tid), float(result.at[tid, ADJUSTED_UNCLIPPED])
-        )
-        part = "holdout" if tid in hold_idx else "fit"
-        examples[str(tid)] = {"transaction_id": tid, "part": part, **one.explain_dict()}
+    for tid in pick_conflict_examples(result, result.index, allow_ids, n=5):
+        part = "holdout" if tid in parts["holdout"] else "fit"
+        examples[str(tid)] = {
+            "transaction_id": tid,
+            "part": part,
+            **replay.evaluate(tid).explain_dict(),
+        }
     (out / "conflict_examples.json").write_text(json.dumps(examples, indent=2, ensure_ascii=False))
     log.info("conflict examples: %s", list(examples))
 
     rng = np.random.default_rng(load_settings()["seed"])
     triggered = result.index[result["triggered_rules"].map(len) > 0]
-    sample_ids = list(rng.choice(result.index, size=min(100, len(result)), replace=False))
-    sample_ids += list(rng.choice(triggered, size=min(100, len(triggered)), replace=False))
-    mismatches = online_check(engine, inputs, result, sample_ids)
-    log.info("batch vs single-record check: %s rows, %s mismatches", len(sample_ids), mismatches)
+    cooled = result.index[result["cooldown_rules"].map(len) > 0]
+    check_ids = list(rng.choice(result.index, size=min(100, len(result)), replace=False))
+    check_ids += list(rng.choice(triggered, size=min(100, len(triggered)), replace=False))
+    check_ids += list(rng.choice(cooled, size=min(50, len(cooled)), replace=False))
+    mismatches = replay.mismatches(check_ids)
+    log.info("batch vs single-record check: %s rows, %s mismatches", len(check_ids), mismatches)
     if mismatches:
         log.error("batch and single-record paths disagree")
         return 1
 
     if not args.no_eval:
-        evaluate_holdout(result, engine, hold_idx, out)
+        evaluate(result, inputs, engine, parts, out)
     log.info("done in %.0fs", time.time() - t0)
     return 0
 

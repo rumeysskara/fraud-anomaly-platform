@@ -8,10 +8,24 @@ from src.rules.engine import ADJUSTED_UNCLIPPED, FINAL_UNCLIPPED, HIT_PREFIX
 from src.rules.schema import Rule
 
 
+def concentration(hit: pd.Series, entity: pd.Series, top: int = 5) -> dict[str, object]:
+    """Label-free health metric: how much of a rule's hits come from its busiest entities."""
+    keys = entity[hit.astype(bool)]
+    if keys.empty:
+        return {"top1_entity": None, "top1_entity_share": 0.0, f"top{top}_entity_share": 0.0}
+    counts = keys.value_counts()
+    return {
+        "top1_entity": str(counts.index[0]),
+        "top1_entity_share": float(counts.iloc[0] / len(keys)),
+        f"top{top}_entity_share": float(counts.iloc[:top].sum() / len(keys)),
+    }
+
+
 def rule_coverage(
-    result: pd.DataFrame, rules: list[Rule], parts: dict[str, pd.Index]
+    result: pd.DataFrame, rules: list[Rule], parts: dict[str, pd.Index], entity: pd.Series
 ) -> pd.DataFrame:
-    """Per rule and part: hits, share of rows, times applied, suppressed and winning."""
+    """Per rule and part: hits (before/after cooldown), share, applied, suppressed, winning and
+    the entity concentration of the hits (label-free)."""
     rows = []
     for rule in rules:
         col = f"{HIT_PREFIX}{rule.id}"
@@ -26,6 +40,8 @@ def rule_coverage(
         for part, idx in parts.items():
             sub = result.loc[idx]
             hits = int(sub[col].sum()) if col in sub else 0
+            cooled = sub["cooldown_rules"].map(lambda x, r=rule.id: r in x)
+            row[f"{part}_hits_before_cooldown"] = hits + int(cooled.sum())
             row[f"{part}_hits"] = hits
             row[f"{part}_share"] = hits / max(len(sub), 1)
             row[f"{part}_applied"] = int(
@@ -35,6 +51,9 @@ def rule_coverage(
                 sub["suppressed_rules"].map(lambda x, r=rule.id: r in x).sum()
             )
             row[f"{part}_winner"] = int((sub["decision_source"] == rule.id).sum())
+            hit = sub[col] == 1 if col in sub else pd.Series(False, index=sub.index)
+            for name, value in concentration(hit, entity.loc[idx]).items():
+                row[f"{part}_{name}"] = value
         rows.append(row)
     return pd.DataFrame(rows)
 

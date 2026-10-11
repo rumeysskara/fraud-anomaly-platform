@@ -114,8 +114,8 @@ def test_score_fallback(engine, neutral):
     assert over.final_score == 1.0 and over.final_score_unclipped == pytest.approx(1.3)
 
 
-def test_allow_rule_overrides_score_review(engine, neutral):
-    trusted = {
+def trusted_record(neutral: dict) -> dict:
+    return {
         **neutral,
         "ent_txn_count": 200,
         "ent_age_days": 40.0,
@@ -123,5 +123,38 @@ def test_allow_rule_overrides_score_review(engine, neutral):
         "device_ent_match": 1,
         "email_ent_known": 1,
     }
-    result = engine.evaluate(trusted, 0.95)
+
+
+def test_allow_cannot_override_score_review(engine, neutral):
+    """Rule 4: a score-threshold review stays review even when R10 (allow) fired."""
+    result = engine.evaluate(trusted_record(neutral), 0.95)
+    assert result.final_decision == "review" and result.decision_source == "score"
+    assert result.applied_rules == []
+    assert result.suppressed_rules[0]["id"] == "R10"
+    assert "skor eşiğinden" in result.suppressed_rules[0]["reason"]
+
+
+def test_allow_below_score_threshold_stays_allow(engine, neutral):
+    result = engine.evaluate(trusted_record(neutral), 0.5)
     assert result.final_decision == "allow" and result.decision_source == "R10"
+
+
+def test_allow_never_overrides_block():
+    """A block rule beats allow even with a lower priority."""
+    res = resolve([rule("T", 1, "low", "allow"), rule("B", 4, "low", "block")], -0.1, 0.4)
+    assert res.decision == "block" and res.winner == "B"
+    assert "block kararını hiçbir zaman" in res.suppressed[0][1]
+
+
+def test_allow_overrides_lower_priority_rule_review():
+    """Allow does override a REVIEW from a rule with a lower priority (current behaviour)."""
+    res = resolve([rule("T", 1, "low", "allow"), rule("R", 3, "high", "review")], -0.1, 0.4)
+    assert res.decision == "allow"
+    assert res.suppressed[0][0] == "R" and "daha yüksek öncelik" in res.suppressed[0][1]
+
+
+def test_engine_allow_vs_card_testing_block(engine, neutral):
+    record = {**trusted_record(neutral), "TransactionAmt": 10.0, "small_amt_streak_1h": 3}
+    result = engine.evaluate(record, 0.3)
+    # R10 itself excludes card testing; R01 decides block either way
+    assert result.final_decision == "block" and "R10" not in result.applied_rules

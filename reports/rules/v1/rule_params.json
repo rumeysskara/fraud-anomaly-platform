@@ -1,0 +1,12 @@
+{
+  "learned": {
+    "amount_small": 25.950001,
+    "amount_high": 441.950012,
+    "velocity_1h_extreme": 12.0,
+    "score_review_threshold": 1.069619,
+    "n_fit": 472432
+  },
+  "external": {
+    "trusted_min_history": 809.0
+  }
+}

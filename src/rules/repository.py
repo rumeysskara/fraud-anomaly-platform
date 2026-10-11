@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from src.core.config import CONFIG_DIR
+from src.core.config import CONFIG_DIR, load_yaml
 from src.core.interfaces import RuleStore
 from src.rules.derive import DERIVED_COLUMNS
 from src.rules.schema import Rule, condition_features, condition_params, template_fields
@@ -41,12 +41,15 @@ class RuleSettings:
     inputs: dict[str, list[str]]
     learned_params: dict[str, dict[str, Any]]
     external_params: dict[str, dict[str, Any]]
+    time_column: str = "TransactionDT"
+    entity_columns: list[str] = field(default_factory=list)
     learned: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> RuleSettings:
-        """Build from the parsed rules.yaml."""
+    def from_dict(cls, data: dict[str, Any], config_dir: Path = CONFIG_DIR) -> RuleSettings:
+        """Build from the parsed rules.yaml (entity key columns come from the entity config)."""
         review = data["decision"]["score_review"]
+        cool = data["cooldown"]
         return cls(
             files=list(data["files"]["rules"]),
             boost_min=float(data["boost"]["min_total"]),
@@ -60,6 +63,8 @@ class RuleSettings:
             inputs={k: list(v) for k, v in data["inputs"].items()},
             learned_params=dict(data.get("learned_params") or {}),
             external_params=dict(data.get("external_params") or {}),
+            time_column=str(cool["time_column"]),
+            entity_columns=list(load_yaml(cool["entity_config"], config_dir)["entity"]["columns"]),
             learned=dict(data.get("learned") or {}),
         )
 
@@ -72,6 +77,11 @@ class RuleSettings:
     def known_features(self) -> set[str]:
         """Names a condition may reference: inputs + derived columns."""
         return set(self.input_columns) | set(DERIVED_COLUMNS)
+
+    @property
+    def cooldown_columns(self) -> list[str]:
+        """Columns a record needs when a rule has a cooldown (time + entity key)."""
+        return [self.time_column, *self.entity_columns]
 
     @property
     def param_names(self) -> set[str]:
@@ -103,7 +113,7 @@ class RuleRepository(RuleStore):
     def reload(self) -> list[Rule]:
         """Re-read the settings and rule files; an invalid file keeps the previous set."""
         data = yaml.safe_load(self.config_path.read_text(encoding="utf-8")) or {}
-        settings = RuleSettings.from_dict(data)
+        settings = RuleSettings.from_dict(data, self.config_path.parent)
         items: list[dict[str, Any]] = []
         for name in settings.files:
             items += _read_rule_items(self.config_path.parent / name)

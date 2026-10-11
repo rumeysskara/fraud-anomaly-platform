@@ -58,4 +58,7 @@ def neutral() -> dict[str, Any]:
         "P_emaildomain": "gmail.com",
         "R_emaildomain": None,
         "email_ent_known": 0,
+        "TransactionDT": 86400,
+        "card1": 1000,
+        "addr1": 300.0,
     }

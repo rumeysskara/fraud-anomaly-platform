@@ -1,6 +1,6 @@
 winner,suppressed,rows,part
-R01,R03,5,fit
 R04,R10,2,fit
 R02,R04,1,fit
 R02,R05,1,fit
+R01,R03,1,fit
 R02,R05,1,holdout

@@ -1,0 +1,9 @@
+part,final_decision,source,rows,share
+fit,allow,default,37890,0.94725
+fit,block,rule,220,0.0055
+fit,review,rule,1574,0.03935
+fit,review,score,316,0.0079
+holdout,allow,default,9375,0.9375
+holdout,block,rule,49,0.0049
+holdout,review,rule,476,0.0476
+holdout,review,score,100,0.01

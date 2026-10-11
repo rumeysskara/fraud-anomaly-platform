@@ -67,8 +67,12 @@ def test_report_helpers(engine, neutral):
     df, scores = synthetic_frame(neutral)
     batch = engine.evaluate_batch(df, scores)
     parts = {"fit": df.index[:200], "holdout": df.index[200:]}
-    cov = rule_coverage(batch, engine.active_rules(), parts)
+    entity = pd.Series(np.where(df.index % 2 == 0, "a", "b"), index=df.index)
+    cov = rule_coverage(batch, engine.active_rules(), parts, entity)
     assert len(cov) == len(engine.active_rules()) and (cov["fit_hits"] >= cov["fit_winner"]).all()
+    assert (cov["fit_hits_before_cooldown"] >= cov["fit_hits"]).all()
+    hit = cov[cov["fit_hits"] > 0]
+    assert ((hit["fit_top1_entity_share"] >= 0.5) & (hit["fit_top5_entity_share"] == 1.0)).all()
     dist = decision_distribution(batch, parts)
     assert dist.groupby("part")["rows"].sum().tolist() == [200, 100]
     picked = pick_conflict_examples(batch, batch.index, {"R10"}, n=2)

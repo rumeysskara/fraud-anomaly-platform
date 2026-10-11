@@ -47,6 +47,12 @@ decision:
     threshold: {param: score_review_threshold}
   default: allow
 
+cooldown:
+  # Rules with `cooldown: {window_seconds: N}` fire at most once per entity within N seconds
+  # (past-only: only the entity's earlier fires count). Entity key = configs/entity.yaml (K-05).
+  time_column: TransactionDT
+  entity_config: entity.yaml
+
 derived:
   # ent_daily_avg = ent_txn_count / max(ent_age_days, daily_avg_min_days) (same as Step 6)
   daily_avg_min_days: 1.0
@@ -157,6 +163,9 @@ rules:
         - {feature: ent_cnt_1h, op: ">=", value: {param: velocity_1h_extreme}}
         - {feature: burst_ratio_1h, op: ">", value: 3}
     action: {risk_boost: 0.15, decision: review, flag: velocity_burst}
+    # Step 7 fix (K-25): one burst = one alert. Without it every transaction of a burst re-fired
+    # (holdout: 1,123 of 1,128 hits on a single entity).
+    cooldown: {window_seconds: 3600, key: entity}
     message: >-
       Velocity patlaması: son 1 saatte {ent_cnt_1h:.0f} önceki işlem (eşik
       {velocity_1h_extreme:.0f}); entity'nin geçmiş günlük ortalaması {ent_daily_avg:.1f}, oran

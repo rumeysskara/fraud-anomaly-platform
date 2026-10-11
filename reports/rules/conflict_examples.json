@@ -26,7 +26,7 @@
     "suppressed_rules": [
       {
         "id": "R10",
-        "reason": "R04 kazandı (öncelik 2, high, review): allow kuralı, eşit veya daha yüksek öncelikli bir block/review varken uygulanmaz",
+        "reason": "R04 kazandı (öncelik 2, high, review): allow kuralı, eşit veya daha yüksek öncelikli bir review varken uygulanmaz",
         "message": "Güvenilir entity: 963 önceki işlem (eşik 809), 64 günlük geçmiş, tutar kendi normalinde (z=1.51), bilinen cihaz ve e-posta, kart testi sinyali yok."
       }
     ],
@@ -150,8 +150,8 @@
     "final_score": 1.0,
     "final_score_unclipped": 1.6472839169947349
   },
-  "3199346": {
-    "transaction_id": 3199346,
+  "3199318": {
+    "transaction_id": 3199318,
     "part": "fit",
     "triggered_rules": [
       {
@@ -178,7 +178,7 @@
       {
         "id": "R03",
         "reason": "R01 kazandı (öncelik 1, critical, block): daha yüksek öncelik (1 < 2)",
-        "message": "Velocity patlaması: son 1 saatte 19 önceki işlem (eşik 12); entity'nin geçmiş günlük ortalaması 5.5, oran 3.5x."
+        "message": "Velocity patlaması: son 1 saatte 17 önceki işlem (eşik 12); entity'nin geçmiş günlük ortalaması 5.5, oran 3.1x."
       }
     ],
     "final_decision": "block",
@@ -187,13 +187,13 @@
       "card_testing"
     ],
     "reasons": [
-      "Kart testi şüphesi: 22.91 USD küçük tutar (eşik 25.95 USD) ve aynı entity'de son 1 saatte 18 önceki küçük işlem."
+      "Kart testi şüphesi: 22.91 USD küçük tutar (eşik 25.95 USD) ve aynı entity'de son 1 saatte 16 önceki küçük işlem."
     ],
-    "anomaly_score": 0.9274389292068879,
-    "adjusted_score": 0.9274389292068879,
-    "adjusted_score_unclipped": 0.9274389292068879,
+    "anomaly_score": 0.9254537462218416,
+    "adjusted_score": 0.9254537462218416,
+    "adjusted_score_unclipped": 0.9254537462218416,
     "boost_total": 0.3,
     "final_score": 1.0,
-    "final_score_unclipped": 1.227438929206888
+    "final_score_unclipped": 1.2254537462218416
   }
 }
