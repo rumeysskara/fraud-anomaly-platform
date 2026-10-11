@@ -18,7 +18,7 @@ STEPS: dict[str, str] = {
     "profile": "scripts/run_profiling.py",
     "features": "scripts/build_features.py",
     "score": "scripts/run_scoring.py",
-    "context": "scripts/adjust_context.py",
+    "context": "scripts/run_context.py",
     "rules": "scripts/apply_rules.py",
     "index": "scripts/build_index.py",
 }
