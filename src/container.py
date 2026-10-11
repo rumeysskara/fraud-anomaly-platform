@@ -7,6 +7,8 @@ from dependency_injector import containers, providers
 from src.context.factory import load_engine
 from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
 from src.features.pipeline import FeaturePipeline
+from src.rules.factory import load_rule_engine
+from src.rules.repository import RuleRepository
 from src.scoring.service import ScoringService
 
 
@@ -27,6 +29,11 @@ class Container(containers.DeclarativeContainer):
 
     # Step 6: context adjuster (configs/context.yaml + fit-learned params + Step 5 weights/table).
     context_adjuster = providers.Singleton(load_engine, ARTIFACTS_DIR / "detectors")
+
+    # Step 7: rule repository (configs/rules.yaml + rules_extra.json, reload()) and rule engine
+    # (thresholds learned on the fit set, stored in rules.yaml `learned:`; never fitted here).
+    rule_repository = providers.Singleton(RuleRepository, CONFIG_DIR / "rules.yaml")
+    rule_engine = providers.Singleton(load_rule_engine, rule_repository)
 
 
 def create_container() -> Container:

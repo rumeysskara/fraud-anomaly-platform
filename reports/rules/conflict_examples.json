@@ -1,0 +1,199 @@
+{
+  "3223234": {
+    "transaction_id": 3223234,
+    "part": "fit",
+    "triggered_rules": [
+      {
+        "id": "R04",
+        "name": "new_card_high_amount",
+        "priority": 2,
+        "severity": "high",
+        "decision": "review",
+        "risk_boost": 0.15
+      },
+      {
+        "id": "R10",
+        "name": "trusted_entity_allow",
+        "priority": 5,
+        "severity": "low",
+        "decision": "allow",
+        "risk_boost": 0.0
+      }
+    ],
+    "applied_rules": [
+      "R04"
+    ],
+    "suppressed_rules": [
+      {
+        "id": "R10",
+        "reason": "R04 kazandı (öncelik 2, high, review): allow kuralı, eşit veya daha yüksek öncelikli bir block/review varken uygulanmaz",
+        "message": "Güvenilir entity: 963 önceki işlem (eşik 809), 64 günlük geçmiş, tutar kendi normalinde (z=1.51), bilinen cihaz ve e-posta, kart testi sinyali yok."
+      }
+    ],
+    "final_decision": "review",
+    "decision_source": "R04",
+    "flags": [
+      "new_card_high_amount"
+    ],
+    "reasons": [
+      "Yeni kart (D1=0) ile yüksek tutar: 450.00 USD (eşik 441.95)."
+    ],
+    "anomaly_score": 0.9962043557652446,
+    "adjusted_score": 0.8160994701287654,
+    "adjusted_score_unclipped": 0.8160994701287654,
+    "boost_total": 0.15,
+    "final_score": 0.9660994701287654,
+    "final_score_unclipped": 0.9660994701287654
+  },
+  "3124924": {
+    "transaction_id": 3124924,
+    "part": "fit",
+    "triggered_rules": [
+      {
+        "id": "R02",
+        "name": "high_amount_foreign_low_volume",
+        "priority": 1,
+        "severity": "critical",
+        "decision": "block",
+        "risk_boost": 0.3
+      },
+      {
+        "id": "R04",
+        "name": "new_card_high_amount",
+        "priority": 2,
+        "severity": "high",
+        "decision": "review",
+        "risk_boost": 0.15
+      },
+      {
+        "id": "R05",
+        "name": "high_amount_foreign",
+        "priority": 2,
+        "severity": "high",
+        "decision": "review",
+        "risk_boost": 0.15
+      }
+    ],
+    "applied_rules": [
+      "R02"
+    ],
+    "suppressed_rules": [
+      {
+        "id": "R04",
+        "reason": "R02 kazandı (öncelik 1, critical, block): daha yüksek öncelik (1 < 2)",
+        "message": "Yeni kart (D1=0) ile yüksek tutar: 500.00 USD (eşik 441.95)."
+      },
+      {
+        "id": "R05",
+        "reason": "R02 kazandı (öncelik 1, critical, block): daha yüksek öncelik (1 < 2)",
+        "message": "Yabancı ülke kodu addr2=96 ile yüksek tutar: 500.00 USD (eşik 441.95)."
+      }
+    ],
+    "final_decision": "block",
+    "decision_source": "R02",
+    "flags": [
+      "foreign_night_high_amount"
+    ],
+    "reasons": [
+      "Yüksek tutar 500.00 USD (eşik 441.95), yabancı ülke kodu addr2=96 ve düşük hacimli saat (tahmini yerel saat 0)."
+    ],
+    "anomaly_score": 0.9938730497074056,
+    "adjusted_score": 1.0,
+    "adjusted_score_unclipped": 1.4908095745611085,
+    "boost_total": 0.3,
+    "final_score": 1.0,
+    "final_score_unclipped": 1.7908095745611086
+  },
+  "3516595": {
+    "transaction_id": 3516595,
+    "part": "holdout",
+    "triggered_rules": [
+      {
+        "id": "R02",
+        "name": "high_amount_foreign_low_volume",
+        "priority": 1,
+        "severity": "critical",
+        "decision": "block",
+        "risk_boost": 0.3
+      },
+      {
+        "id": "R05",
+        "name": "high_amount_foreign",
+        "priority": 2,
+        "severity": "high",
+        "decision": "review",
+        "risk_boost": 0.15
+      }
+    ],
+    "applied_rules": [
+      "R02"
+    ],
+    "suppressed_rules": [
+      {
+        "id": "R05",
+        "reason": "R02 kazandı (öncelik 1, critical, block): daha yüksek öncelik (1 < 2)",
+        "message": "Yabancı ülke kodu addr2=96 ile yüksek tutar: 994.00 USD (eşik 441.95)."
+      }
+    ],
+    "final_decision": "block",
+    "decision_source": "R02",
+    "flags": [
+      "foreign_night_high_amount"
+    ],
+    "reasons": [
+      "Yüksek tutar 994.00 USD (eşik 441.95), yabancı ülke kodu addr2=96 ve düşük hacimli saat (tahmini yerel saat 2)."
+    ],
+    "anomaly_score": 0.9762926934744456,
+    "adjusted_score": 1.0,
+    "adjusted_score_unclipped": 1.3472839169947348,
+    "boost_total": 0.3,
+    "final_score": 1.0,
+    "final_score_unclipped": 1.6472839169947349
+  },
+  "3199346": {
+    "transaction_id": 3199346,
+    "part": "fit",
+    "triggered_rules": [
+      {
+        "id": "R01",
+        "name": "card_testing",
+        "priority": 1,
+        "severity": "critical",
+        "decision": "block",
+        "risk_boost": 0.3
+      },
+      {
+        "id": "R03",
+        "name": "velocity_burst",
+        "priority": 2,
+        "severity": "high",
+        "decision": "review",
+        "risk_boost": 0.15
+      }
+    ],
+    "applied_rules": [
+      "R01"
+    ],
+    "suppressed_rules": [
+      {
+        "id": "R03",
+        "reason": "R01 kazandı (öncelik 1, critical, block): daha yüksek öncelik (1 < 2)",
+        "message": "Velocity patlaması: son 1 saatte 19 önceki işlem (eşik 12); entity'nin geçmiş günlük ortalaması 5.5, oran 3.5x."
+      }
+    ],
+    "final_decision": "block",
+    "decision_source": "R01",
+    "flags": [
+      "card_testing"
+    ],
+    "reasons": [
+      "Kart testi şüphesi: 22.91 USD küçük tutar (eşik 25.95 USD) ve aynı entity'de son 1 saatte 18 önceki küçük işlem."
+    ],
+    "anomaly_score": 0.9274389292068879,
+    "adjusted_score": 0.9274389292068879,
+    "adjusted_score_unclipped": 0.9274389292068879,
+    "boost_total": 0.3,
+    "final_score": 1.0,
+    "final_score_unclipped": 1.227438929206888
+  }
+}

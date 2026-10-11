@@ -99,3 +99,15 @@ class BaseAgent(ABC):
     @abstractmethod
     def handle(self, message: AgentMessage) -> AgentMessage:
         """Process a message and return a reply."""
+
+
+class RuleStore(ABC):
+    """Source of rule definitions (Repository): YAML/JSON files, reloadable (Step 7)."""
+
+    @abstractmethod
+    def reload(self) -> list[Any]:
+        """Re-read and validate the rule definitions; return the loaded rules."""
+
+    @abstractmethod
+    def parse(self, payload: Any) -> list[Any]:
+        """Validate a rule set given at request time and return it (not stored)."""

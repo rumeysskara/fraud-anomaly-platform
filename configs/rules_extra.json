@@ -1,0 +1,40 @@
+{
+  "rules": [
+    {
+      "id": "R11",
+      "name": "converted_amount_no_country_high_amount",
+      "description": "Three-decimal amount (possible currency conversion), addr2 missing and high amount.",
+      "priority": 3,
+      "severity": "medium",
+      "condition": {
+        "all": [
+          {"feature": "amt_has_3dec", "op": "==", "value": 1},
+          {"feature": "addr2", "op": "is_null", "value": true},
+          {"feature": "TransactionAmt", "op": ">=", "value": {"param": "amount_high"}}
+        ]
+      },
+      "action": {"risk_boost": 0.08, "decision": "review", "flag": "converted_amount_no_country"},
+      "message": "Kur çevrimi görünümlü 3 ondalıklı tutar {TransactionAmt:.3f} USD, ülke kodu (addr2) yok ve tutar yüksek (eşik {amount_high:.2f}).",
+      "tags": ["amount", "geo"],
+      "enabled": true
+    },
+    {
+      "id": "R12",
+      "name": "holiday_new_card_high_amount",
+      "description": "Learned holiday season, new card (D1 = 0) and high amount.",
+      "priority": 3,
+      "severity": "medium",
+      "condition": {
+        "all": [
+          {"feature": "holiday_season", "op": "==", "value": 1},
+          {"feature": "card_age_days", "op": "==", "value": 0},
+          {"feature": "TransactionAmt", "op": ">=", "value": {"param": "amount_high"}}
+        ]
+      },
+      "action": {"risk_boost": 0.08, "decision": "review", "flag": "holiday_new_card_high_amount"},
+      "message": "Tatil sezonunda yeni kart (D1=0) ile yüksek tutar: {TransactionAmt:.2f} USD (eşik {amount_high:.2f}).",
+      "tags": ["season", "card", "amount"],
+      "enabled": true
+    }
+  ]
+}

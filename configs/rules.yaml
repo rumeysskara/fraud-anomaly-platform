@@ -1,0 +1,293 @@
+# Step 7 - configurable rule engine (design given by the user, see docs/step7.md and
+# docs/decisions.md K-21...). No rule, threshold or boost is hardcoded in src/rules.
+#
+# Input: Step 6 adjusted score (adjusted_score_unclipped is the score the rules boost and rank by)
+# plus features.parquet / merged.parquet columns. The fraud label is never used here.
+#
+# Rule schema (validated with pydantic v2 in src/rules/schema.py; an invalid rule is rejected at
+# load time, unknown feature or param names are rejected too):
+#   id, name, description, priority (1 = highest), severity (low|medium|high|critical),
+#   condition, action {risk_boost, decision: block|review|allow, flag}, message, tags, enabled
+#
+# Condition DSL: nested `all: [...]`, `any: [...]`, `not: {...}` nodes; a leaf clause is
+#   {feature: <name>, op: <op>, value: <number|string|list|{param: name}>}
+#   op: > >= < <= == != in not_in between is_null contains
+#   between: value = [low, high] (inclusive); is_null: value true (default) or false.
+#   A missing value (NaN/None) never satisfies a comparison; only is_null sees it.
+#   {param: name} = threshold learned on the FIT set (learned_params) or read from another step's
+#   artifact (external_params).
+#
+# message: Turkish template filled with the record's real values, e.g. {TransactionAmt:.2f};
+#   placeholders may be features, derived columns, params or score names.
+#
+# Conflict resolution (src/rules/resolver.py):
+#   1. smaller priority wins  2. same priority: higher severity  3. then block > review > allow
+#   4. an allow rule wins only when no block/review rule with the same or higher priority fired
+#   Rules whose decision differs from the final decision are suppressed (with the reason) and their
+#   boost is not applied. final_score_unclipped = adjusted_score_unclipped + clip(sum(boosts));
+#   alarms are ranked by the unclipped value, final_score = clip(.., 0, 1) is for output only.
+
+files:
+  # Rule files loaded by RuleRepository, relative to configs/. YAML and JSON are both accepted.
+  rules: [rules.yaml, rules_extra.json]
+
+boost:
+  # Sum of the applied rules' risk_boost is clipped to this range.
+  min_total: -0.10
+  max_total: 0.40
+
+score_clip: {min: 0.0, max: 1.0}
+
+decision:
+  # When no rule decides: review if final_score_unclipped >= the param below, else default.
+  # The param is a FIT quantile of adjusted_score_unclipped (label-free); set enabled: false to
+  # turn the score-based review off.
+  score_review:
+    enabled: true
+    threshold: {param: score_review_threshold}
+  default: allow
+
+derived:
+  # ent_daily_avg = ent_txn_count / max(ent_age_days, daily_avg_min_days) (same as Step 6)
+  daily_avg_min_days: 1.0
+
+# Input columns a rule may reference (anything else is rejected at load time).
+# Derived columns are computed by src/rules/derive.py (batch and single record share the code):
+#   known_device, known_email, ent_daily_avg, burst_ratio_1h
+inputs:
+  features:     # data/processed/features.parquet (Step 3, past-only history features)
+    - small_amt_streak_1h
+    - ent_cnt_1h
+    - ent_txn_count
+    - ent_age_days
+    - ent_avg_amt
+    - amt_ratio_to_ent_avg
+    - amt_zscore_ent
+    - is_first_seen
+    - card_age_days
+    - foreign_addr2
+    - addr2_missing
+    - is_low_volume_window
+    - local_hour_est
+    - is_weekend
+    - has_identity
+    - email_mismatch
+    - amt_has_3dec
+    - holiday_season
+    - device_ent_match
+  raw:          # data/processed/merged.parquet, joined by TransactionID
+    - TransactionAmt
+    - ProductCD
+    - addr2
+    - P_emaildomain
+    - R_emaildomain
+  history:      # computed past-only by the batch builder; the online record carries it
+    - email_ent_known
+  scores:       # Step 5 / Step 6 scores
+    - anomaly_score
+    - adjusted_score
+    - adjusted_score_unclipped
+
+learned_params:
+  # Learned on the FIT set (first 80% by TransactionDT) by scripts/run_rules.py and written to the
+  # `learned:` block at the end of this file (SAMPLE_N runs: reports/rules/sample/rule_params.json).
+  amount_small:           # "small amount" for card testing; equals Step 3 small_amt_threshold
+    column: TransactionAmt
+    quantile: 0.10
+  amount_high:            # "high amount" in every rule
+    column: TransactionAmt
+    quantile: 0.95
+  velocity_1h_extreme:    # R03: extreme 1-hour count of previous entity transactions
+    column: ent_cnt_1h
+    quantile: 0.999
+  score_review_threshold: # score-based review when no rule decides (top 1% of fit)
+    column: adjusted_score_unclipped
+    quantile: 0.99
+
+external_params:
+  # Read from another step's artifact (never re-learned here). sample runs use <dir>/sample/.
+  trusted_min_history:    # Step 6 C4 definition of "long history" (fit q90 of ent_txn_count)
+    dir: artifacts/context
+    file: context_params.json
+    key: trusted_min_history
+
+rules:
+  - id: R01
+    name: card_testing
+    description: Small amount (<= fit q10) and at least 2 earlier small transactions of the same entity in the last hour.
+    priority: 1
+    severity: critical
+    condition:
+      all:
+        - {feature: TransactionAmt, op: "<=", value: {param: amount_small}}
+        - {feature: small_amt_streak_1h, op: ">=", value: 2}
+    action: {risk_boost: 0.30, decision: block, flag: card_testing}
+    message: >-
+      Kart testi şüphesi: {TransactionAmt:.2f} USD küçük tutar (eşik {amount_small:.2f} USD) ve
+      aynı entity'de son 1 saatte {small_amt_streak_1h:.0f} önceki küçük işlem.
+    tags: [card_testing, velocity]
+    enabled: true
+
+  - id: R02
+    name: high_amount_foreign_low_volume
+    description: High amount (>= fit q95), foreign addr2 (not the dominant fit value) and the low-volume window.
+    priority: 1
+    severity: critical
+    condition:
+      all:
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+        - {feature: foreign_addr2, op: "==", value: 1}
+        - {feature: is_low_volume_window, op: "==", value: 1}
+    action: {risk_boost: 0.30, decision: block, flag: foreign_night_high_amount}
+    message: >-
+      Yüksek tutar {TransactionAmt:.2f} USD (eşik {amount_high:.2f}), yabancı ülke kodu
+      addr2={addr2:.0f} ve düşük hacimli saat (tahmini yerel saat {local_hour_est:.0f}).
+    tags: [amount, geo, time]
+    enabled: true
+
+  - id: R03
+    name: velocity_burst
+    description: >-
+      Previous-hour entity count >= fit p99.9 and more than 3x the entity's own historical daily
+      average (burst_ratio_1h = ent_cnt_1h / ent_daily_avg).
+    priority: 2
+    severity: high
+    condition:
+      all:
+        - {feature: ent_cnt_1h, op: ">=", value: {param: velocity_1h_extreme}}
+        - {feature: burst_ratio_1h, op: ">", value: 3}
+    action: {risk_boost: 0.15, decision: review, flag: velocity_burst}
+    message: >-
+      Velocity patlaması: son 1 saatte {ent_cnt_1h:.0f} önceki işlem (eşik
+      {velocity_1h_extreme:.0f}); entity'nin geçmiş günlük ortalaması {ent_daily_avg:.1f}, oran
+      {burst_ratio_1h:.1f}x.
+    tags: [velocity]
+    enabled: true
+
+  - id: R04
+    name: new_card_high_amount
+    description: New card (D1 = card_age_days = 0) and high amount.
+    priority: 2
+    severity: high
+    condition:
+      all:
+        - {feature: card_age_days, op: "==", value: 0}
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+    action: {risk_boost: 0.15, decision: review, flag: new_card_high_amount}
+    message: >-
+      Yeni kart (D1=0) ile yüksek tutar: {TransactionAmt:.2f} USD (eşik {amount_high:.2f}).
+    tags: [card, amount]
+    enabled: true
+
+  - id: R05
+    name: high_amount_foreign
+    description: High amount and foreign addr2.
+    priority: 2
+    severity: high
+    condition:
+      all:
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+        - {feature: foreign_addr2, op: "==", value: 1}
+    action: {risk_boost: 0.15, decision: review, flag: foreign_high_amount}
+    message: >-
+      Yabancı ülke kodu addr2={addr2:.0f} ile yüksek tutar: {TransactionAmt:.2f} USD (eşik
+      {amount_high:.2f}).
+    tags: [amount, geo]
+    enabled: true
+
+  - id: R06
+    name: amount_deviation
+    description: Amount >= 5x the entity's historical average, with at least 5 previous transactions.
+    priority: 3
+    severity: medium
+    condition:
+      all:
+        - {feature: amt_ratio_to_ent_avg, op: ">=", value: 5}
+        - {feature: ent_txn_count, op: ">=", value: 5}
+    action: {risk_boost: 0.08, decision: review, flag: amount_deviation}
+    message: >-
+      Tutar {TransactionAmt:.2f} USD, entity'nin geçmiş ortalamasının ({ent_avg_amt:.2f} USD)
+      {amt_ratio_to_ent_avg:.1f} katı; geçmiş {ent_txn_count:.0f} işlem.
+    tags: [amount, entity]
+    enabled: true
+
+  - id: R07
+    name: first_transaction_high_amount
+    description: First transaction of the entity and high amount.
+    priority: 3
+    severity: medium
+    condition:
+      all:
+        - {feature: is_first_seen, op: "==", value: 1}
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+    action: {risk_boost: 0.08, decision: review, flag: first_txn_high_amount}
+    message: >-
+      Entity'nin ilk işlemi ve yüksek tutar: {TransactionAmt:.2f} USD (eşik {amount_high:.2f}).
+    tags: [entity, amount]
+    enabled: true
+
+  - id: R08
+    name: no_identity_high_amount
+    description: No identity record, high amount, ProductCD != W (W never has identity data).
+    priority: 3
+    severity: medium
+    condition:
+      all:
+        - {feature: has_identity, op: "==", value: 0}
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+        - {feature: ProductCD, op: "!=", value: W}
+    action: {risk_boost: 0.08, decision: review, flag: no_identity_high_amount}
+    message: >-
+      Kimlik/cihaz kaydı yok, ürün {ProductCD} ve yüksek tutar: {TransactionAmt:.2f} USD (eşik
+      {amount_high:.2f}).
+    tags: [identity, amount]
+    enabled: true
+
+  - id: R09
+    name: email_mismatch_high_amount
+    description: >-
+      Purchaser and recipient e-mail domains both present and different, high amount. Low
+      severity: in the EDA the P = R effect is confounded with ProductCD (docs/eda.md).
+    priority: 4
+    severity: low
+    condition:
+      all:
+        - {feature: email_mismatch, op: "==", value: 1}
+        - {feature: TransactionAmt, op: ">=", value: {param: amount_high}}
+    action: {risk_boost: 0.03, decision: review, flag: email_mismatch}
+    message: >-
+      Alıcı ve gönderen e-posta alanı farklı ({P_emaildomain} / {R_emaildomain}) ve yüksek
+      tutar: {TransactionAmt:.2f} USD.
+    tags: [email, amount]
+    enabled: true
+
+  - id: R10
+    name: trusted_entity_allow
+    description: >-
+      Step 6 C4 trusted definition (history >= C4 fit q90 from artifacts/context, age >= 30 days,
+      |amt_zscore_ent| <= 2, known device AND known e-mail) and no card-testing signal.
+    priority: 5
+    severity: low
+    condition:
+      all:
+        - {feature: ent_txn_count, op: ">=", value: {param: trusted_min_history}}
+        - {feature: ent_age_days, op: ">=", value: 30}
+        - {feature: amt_zscore_ent, op: between, value: [-2.0, 2.0]}
+        - {feature: known_device, op: "==", value: 1}
+        - {feature: known_email, op: "==", value: 1}
+        - not: {feature: small_amt_streak_1h, op: ">=", value: 2}
+    action: {risk_boost: 0.0, decision: allow, flag: trusted_entity}
+    message: >-
+      Güvenilir entity: {ent_txn_count:.0f} önceki işlem (eşik {trusted_min_history:.0f}),
+      {ent_age_days:.0f} günlük geçmiş, tutar kendi normalinde (z={amt_zscore_ent:.2f}), bilinen
+      cihaz ve e-posta, kart testi sinyali yok.
+    tags: [trusted, allow]
+    enabled: true
+
+# ---- learned on the fit set by scripts/run_rules.py (do not edit by hand) ----
+learned:
+  amount_small: 25.950001
+  amount_high: 441.950012
+  velocity_1h_extreme: 12.0
+  score_review_threshold: 1.069619
+  n_fit: 472432

@@ -1,0 +1,48 @@
+{
+  "3021794": {
+    "transaction_id": 3021794,
+    "part": "fit",
+    "triggered_rules": [
+      {
+        "id": "R01",
+        "name": "card_testing",
+        "priority": 1,
+        "severity": "critical",
+        "decision": "block",
+        "risk_boost": 0.3
+      },
+      {
+        "id": "R03",
+        "name": "velocity_burst",
+        "priority": 2,
+        "severity": "high",
+        "decision": "review",
+        "risk_boost": 0.15
+      }
+    ],
+    "applied_rules": [
+      "R01"
+    ],
+    "suppressed_rules": [
+      {
+        "id": "R03",
+        "reason": "R01 kazandı (öncelik 1, critical, block): daha yüksek öncelik (1 < 2)",
+        "message": "Velocity patlaması: son 1 saatte 7 önceki işlem (eşik 7); entity'nin geçmiş günlük ortalaması 2.1, oran 3.4x."
+      }
+    ],
+    "final_decision": "block",
+    "decision_source": "R01",
+    "flags": [
+      "card_testing"
+    ],
+    "reasons": [
+      "Kart testi şüphesi: 5.00 USD küçük tutar (eşik 25.00 USD) ve aynı entity'de son 1 saatte 2 önceki küçük işlem."
+    ],
+    "anomaly_score": 0.9992208709218532,
+    "adjusted_score": 0.9992208709218532,
+    "adjusted_score_unclipped": 0.9992208709218532,
+    "boost_total": 0.3,
+    "final_score": 1.0,
+    "final_score_unclipped": 1.2992208709218531
+  }
+}
