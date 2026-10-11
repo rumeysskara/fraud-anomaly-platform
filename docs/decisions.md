@@ -32,4 +32,9 @@ Kararları geliştirici verir; Claude Code seçenekleri sunar.
 - **Alternatifler:** Sabit boyutlu (token/karakter) chunking, overlap'li.
 - **Neden seçildi:** Politika dokümanları başlıklarla yapılandırılmış; başlık sınırı anlam bütünlüğünü korur. Kural bazlı chunk + `rule_id` metadata, tetiklenen kural ID'sine göre filtreli retrieval ve kaynak gösterimini mümkün kılar.
 
-(Sıradaki kararlar: entity proxy, anomali yöntemleri ve ağırlıkları.)
+### K-05: Entity proxy
+- **Karar:** `card1 + addr1` (adaylarda H); addr1 eksikse NaN ayrı seviye olur. `configs/entity.yaml` içine yazıldı. `D1` anahtara girmez; Adım 3'te "kart yaşı" feature'ı olarak kullanılır (`floor(TransactionDT/86400) - D1`).
+- **Alternatifler:** A (`card1`), I (`card1+addr1+D1n`), J (`I + P_emaildomain`).
+- **Neden seçildi:** I entity'leri daha homojen yapıyor (log-tutar std 0,35 vs 0,59) ama holdout satırlarının %56'sında entity fit'te görülmüyor; geçmiş tabanlı feature'lar soğuk başlar. H tüm satırları kapsar (tanımsız satır %0) ve holdout'ta %95,8 oranında tanınır. A daha basit ama birden çok kartı birleştirir (max 14.932 işlem). Entity seçimi etiket kullanılmadan, yalnızca sayısal karşılaştırmayla yapıldı.
+
+(Sıradaki kararlar: anomali yöntemleri ve ağırlıkları.)

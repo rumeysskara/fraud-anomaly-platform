@@ -1,0 +1,78 @@
+# Profiling thresholds and constants (Step 1-2). Single source: code reads this file only.
+loading:
+  chunksize: 100000            # CSV rows per chunk while downcasting
+  category_max_ratio: 0.5      # string column becomes category if n_unique <= ratio * n_rows
+
+schema:
+  low_card_max: 20             # cardinality_class: low <= this
+  high_card_abs: 1000          # cardinality_class: high > this
+  int_categorical_max: 10      # integral numeric with <= this many uniques -> categorical
+  id_unique_ratio: 0.9         # id: n_unique / non-null above this ...
+  id_min_unique: 1000          # ... and n_unique above this
+  coded_categorical_groups: [card, addr]   # numeric codes that are really categories (data dictionary)
+
+quality:
+  high_null: 0.9
+  non_negative_groups: [C, D, card, addr, dist]
+  non_negative_columns: [TransactionAmt, TransactionDT]
+  amount_column: TransactionAmt
+
+outliers:
+  iqr_k: 1.5
+  robust_z_cut: 3.5
+  robust_z_scale: 0.6745       # robust z = scale * (x - median) / MAD
+  log_columns: [TransactionAmt]
+
+distributions:
+  quantiles: [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99]
+  top_n: 10
+
+rare:
+  rare_ratio: 0.0001           # combination is rare when its row share is below this
+  max_rows_per_set: 1000       # detail rows kept per key set
+  key_sets:
+    - [card4, card6, ProductCD]
+    - [P_emaildomain, R_emaildomain]
+    - [DeviceType, DeviceInfo]
+
+relations:
+  sample_rows: 100000          # seeded random sample for speed (not a split)
+  spearman_min_abs: 0.8
+  spearman_min_periods: 500
+  cramers_min: 0.5
+  cramers_max_levels: 50
+  cluster_threshold: 0.95
+
+entity:
+  amount_column: TransactionAmt
+  day_seconds: 86400
+  # D1n = floor(TransactionDT / day_seconds) - D1  (approximate first-use day of the card)
+  first_use_day: {name: D1n, d_column: D1}
+  # na_level: columns where NaN becomes its own level instead of an undefined row.
+  candidates:
+    A_card1: {columns: [card1]}
+    B_card1_addr1: {columns: [card1, addr1]}
+    C_card1_card2_card3_card5_addr1: {columns: [card1, card2, card3, card5, addr1]}
+    D_card_all_no_addr: {columns: [card1, card2, card3, card4, card5, card6]}
+    E_card1_addr1_Pemail: {columns: [card1, addr1, P_emaildomain]}
+    F_card1_addr1_DeviceInfo: {columns: [card1, addr1, DeviceInfo]}
+    G_card1_Pemail: {columns: [card1, P_emaildomain]}
+    H_card1_addr1_na_level: {columns: [card1, addr1], na_level: [addr1]}
+    I_card1_addr1_D1n: {columns: [card1, addr1, D1n], na_level: [addr1, D1n]}
+    J_card1_addr1_Pemail_D1n:
+      columns: [card1, addr1, P_emaildomain, D1n]
+      na_level: [addr1, P_emaildomain, D1n]
+  # Reference for the D1n constancy check only (table: false keeps it out of the comparison
+  # table): a strict "same card" key; if D1n is a stable card attribute it must be ~constant here.
+    REF_card_full_addr1:
+      columns: [card1, card2, card3, card4, card5, card6, addr1]
+      na_level: [card2, card3, card4, card5, card6, addr1]
+      table: false
+  # Entities checked for D1n constancy, in order (H = without D1n, I = H split by D1n).
+  constancy:
+    levels: [H_card1_addr1_na_level, REF_card_full_addr1, I_card1_addr1_D1n]
+    tolerance_days: 1
+
+figures:
+  dpi: 120
+  amount_bins: 80

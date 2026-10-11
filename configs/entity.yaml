@@ -1,0 +1,11 @@
+# Entity proxy (decision K-05, docs/decisions.md). There is no user_id; everyone reads the entity key from here.
+entity:
+  name: card1_addr1
+  columns: [card1, addr1]
+  # NaN in these columns becomes its own level, so no row is left without an entity.
+  na_level: [addr1]
+  # D1 is NOT part of the key. Step 3 uses it as a "card age" feature:
+  # card_age_days = floor(TransactionDT / day_seconds) - D1.
+  card_age:
+    d_column: D1
+    day_seconds: 86400

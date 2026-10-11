@@ -15,7 +15,7 @@ from src.core.config import set_seed  # noqa: E402
 
 # step name -> script (written by later steps)
 STEPS: dict[str, str] = {
-    "profile": "scripts/profile_data.py",
+    "profile": "scripts/run_profiling.py",
     "features": "scripts/build_features.py",
     "score": "scripts/score_anomalies.py",
     "context": "scripts/adjust_context.py",
