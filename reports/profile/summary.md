@@ -116,7 +116,3 @@ Satir: 590540, kolon (has_identity dahil): 433
 | I_card1_addr1_D1n | multi_txn | jitter | 0 | 0 | 0 | 0 | nan |
 | I_card1_addr1_D1n | multi_txn | multi | 0 | 0 | 0 | 0 | nan |
 
-
-## Etiket taban orani (yalnizca raporlama)
-- fit_base_rate: 0.0351
-- holdout_base_rate: 0.0344

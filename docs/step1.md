@@ -17,13 +17,13 @@
 ## Çalıştırma süresi ve bellek (MacBook Air, 16 GB)
 | Çalışma | Süre | Tepe RSS (`/usr/bin/time -l`) |
 |---|---|---|
-| `SAMPLE_N=50000` | ~26 s | ~1,5 GB |
-| Tam veri (`scripts/run_profiling.py`, tüm adımlar) | ~82 s | ~3,5 GB (peak footprint 5,3 GB) |
+| `SAMPLE_N=50000` | ~21 s | ~1,4 GB |
+| Tam veri (`scripts/run_profiling.py`, tüm adımlar) | ~81 s | ~2,7 GB (peak footprint 5,3 GB) |
 | Yalnızca yükleme aşaması (`load_merged`) | ~13 s | ~1,8-2,0 GB |
 | Eski tek-parça `load_data` (kaldırıldı; karşılaştırma için ölçülmüştü) | ~12 s | ~2,6 GB |
 
 Bellek sorunu çıkmadı. `load_merged` yükleme tepesini ~%30 düşürür ve string kolonları `category` yapar;
-profil aşamasının tepesi (3,5 GB) Spearman için alınan 100k satırlık rank matrisinden ve kolon bazlı kopyalardan gelir.
+profil aşamasının tepesi (2,7 GB) Spearman için fit kümesinden alınan 100k satırlık rank matrisinden ve kolon bazlı kopyalardan gelir.
 
 ## Veri kalitesi bulguları (tam veri)
 - Eksik veri grup bazlı (`reports/profile/group_missing.csv`): id %85, dist %77, D %58, M %50, V %43, addr %11, card %0,5, C %0.
@@ -46,8 +46,14 @@ oranı >0,9 ve >1000 = id). Tek isim tabanlı istisna: `card*` ve `addr*` grupla
 bunlar `type_source=dictionary` ile işaretlenir. Not: `id` kuralı örnekleme duyarlıdır (50k örneklemde id_02 `id` çıkar, tam veride çıkmaz).
 
 ## isFraud kullanımı
-Kullanıldı mı: **hayır** (özellik, eşik, entity ve kolon seçiminde). `isFraud` yalnızca loader'dan ayrı `y` olarak geldi ve
-tek bir yerde okundu: fit/holdout taban oranı raporlamak için (fit %3,51; holdout %3,44), hiçbir seçimde kullanılmadı.
+Kullanıldı mı: **hayır** (özellik, eşik, entity ve kolon seçiminde). `src/profiling/` etiketi hiç okumaz (`run_profile` `y` almaz).
+`y` yalnızca loader'dan ayrı Series olarak gelir ve `scripts/run_profiling.py` onu `src/evaluation/base_rate.py`'ye verir; çıktı
+`reports/profile/label_base_rate.csv` (tüm veri %3,50; fit %3,51; holdout %3,44). Yalnızca raporlama, hiçbir seçimde kullanılmadı.
+
+## Hangi tablo tüm veride, hangisi fit kümesinde
+- **Tüm veri (tanımlayıcı):** column_schema, missing, group_missing, quality_checks, temporal, entity_patterns (`full` ve `fit` satırları ayrı), d1n_constancy, d1_semantics, join istatistikleri.
+- **Yalnızca fit kümesi (ilk %80, 472.432 satır; Adım 3 bunları öğrenilmiş istatistik olarak kullanır):** outliers, distributions, categorical_topn,
+  rare_categories/rare_summary, column_relations (Spearman/Cramér), redundancy_clusters; `amount_log.png`.
 
 ## Bir sonraki adımın girdisi
 `data/processed/merged.parquet` + `reports/profile/column_schema.parquet` (tip ve cardinality sınıfı). Adım 3 bunları okuyup

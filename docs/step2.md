@@ -1,6 +1,6 @@
 # Adım 2 — Profiling ve semantik yapı
 
-Eşikler ve entity adayları `configs/profiling.yaml` içindedir (kodda ikinci kopya yok). Kod: `src/profiling/` (schema, quality, distributions, relations, entity, figures, report), betik: `scripts/run_profiling.py`
+Eşikler ve entity adayları `configs/profiling.yaml` içindedir; seçilen entity ve D1n tanımı (`day_seconds`) yalnızca `configs/entity.yaml` içindedir ve profiling oradan okur (kodda ikinci kopya yok). Kod: `src/profiling/` (schema, quality, distributions, relations, entity, figures, report), betik: `scripts/run_profiling.py`
 (`make profile` -> `run_pipeline.py --only profile`). Tüm tablolar `reports/profile/` altında (parquet; küçük olanlar ayrıca csv),
 özet `reports/profile/summary.md`, grafikler `reports/figures/*.png`. Seed 42.
 
@@ -15,17 +15,18 @@ Eşikler ve entity adayları `configs/profiling.yaml` içindedir (kodda ikinci k
 | `redundancy_clusters.parquet|csv` | Aynı grupta |rho|>=0,95 bağlı bileşenler, temsilci = en az null'lu kolon |
 | `entity_patterns.parquet|csv` | Entity adayları karşılaştırması (aşağıda; 10 aday, her biri `full` ve `fit`) |
 | `d1n_constancy.parquet|csv` | D1n sabitlik kontrolü (aşağıda) |
+| `d1_semantics.csv|md` | D1 anlamı testi (aşağıda) |
 | `temporal.parquet` | Saat/haftanın günü dağılımı |
 
-## Bulgular (tam veri)
-- **TransactionAmt**: medyan 68,8; ortalama 135; skew 14,4; kurtosis 1124; max 31.937. Ham ölçekte IQR ile %11,3 aykırı,
-  log1p ölçekte %3,5 (robust z: %10,1 -> %1,2). Dağılım log ölçekte neredeyse simetrik; aykırılık büyük ölçüde çarpıklık etkisidir.
+## Bulgular (outlier, dağılım, seyreklik, ilişki ve kümeler FİT kümesinde; zamansal ve veri kalitesi tüm veride)
+- **TransactionAmt** (fit): medyan 69,0; ortalama 134; skew 16,4; kurtosis 1424; max 31.937. Ham ölçekte IQR ile %11,3 aykırı,
+  log1p ölçekte %3,3 (robust z: %10,1 -> %1,1). Dağılım log ölçekte neredeyse simetrik; aykırılık büyük ölçüde çarpıklık etkisidir.
   En çarpık kolonlar V311, V129, V309, V206 (skew 180-320).
-- **V kolonları**: 339 kolonun 222'si 71 kümeye düşüyor (|rho|>=0,95); küme başına temsilci tutulursa 339 -> 188. C'de 1 (C8,C10),
-  D'de 3 küme (örn. D4-D6-D12). Bu, Adım 3'te V için kolon azaltma girdisidir.
+- **V kolonları** (fit): 339 kolonun 227'si 73 kümeye düşüyor (|rho|>=0,95); küme başına temsilci tutulursa 339 -> 185. C'de 1 (C8,C10),
+  D'de 2 küme (D4-D6-D12 ve D5-D7). Bu, Adım 3'te V için kolon azaltma girdisidir.
 - **Cramér's V** yüksek çiftler: ProductCD-has_identity 0,97 (W'de identity yok), id_28-id_29 0,98, id_15-id_16 0,98.
-- **Seyrek kombinasyon**: (DeviceType,DeviceInfo) 1.943 kombinasyonun %94'ü seyrek (satırların %2,4'ü); (P,R emaildomain) 743 kombinasyonun
-  %81'i seyrek (satırların %0,87); (card4,card6,ProductCD) satırların %0,03'ü. Seyrek kombinasyon Adım 4'te "nadir görülme" sinyali adayıdır.
+- **Seyrek kombinasyon** (fit): (DeviceType,DeviceInfo) 1.761 kombinasyonun %93'ü seyrek (satırların %2,4'ü); (P,R emaildomain) 706 kombinasyonun
+  %79'u seyrek (satırların %0,89); (card4,card6,ProductCD) satırların %0,03'ü. Seyrek kombinasyon Adım 4'te "nadir görülme" sinyali adayıdır.
 - **Zamansal**: işlem hacmi saat 7-9'da dip (%0,4-0,6/saat), 17-22 arası tepe (~%7/saat). Saat dilimi bilinmediği için mutlak
   saat yorumlanmaz, yalnızca döngü biçimi kullanılabilir.
 
@@ -64,6 +65,12 @@ D1 tam veride tamsayı değerli (%100) ve %0,2 NaN; NaN ayrı seviye. Tüm NaN'l
 
 Fit kümesi değerleri `entity_patterns.csv` içinde (örn. I: 182.535 entity, p99 19, max 361).
 
+### Fit kümesine geçişin etkisi (Spearman/Cramér/outlier/dağılım)
+Önceki (tüm veri) ve yeni (fit) sonuçlar: küme sayısı 75 -> 76, kümelerdeki kolon 231 -> 234; 72 küme birebir aynı, 3 küme yalnızca eskide, 4 küme yalnızca yenide.
+V: 71 -> 73 küme, 222 -> 227 kolon, temsilci sonrası 188 -> 185. D'de D1-D2 kümesi fit'te |rho| < 0,95 olduğu için düştü (3 -> 2 küme).
+Eskide olup yeni kümelerde olmayan kolonlar: D1, D2, V245, V259; yeni gelenler: V68, V151, V152, V170, V171, V184, V185.
+Cramér çifti sayısı aynı (15), en yüksek çiftler aynı (id_28-id_29 0,98, id_15-id_16 0,98, ProductCD-has_identity 0,97). Spearman çifti 1779 -> 1746.
+
 ### D1n sabitlik kontrolü (`reports/profile/d1n_constancy.csv`)
 Soru: aynı entity içinde D1n sabit mi (±1 gün tolerans)? D1n'i içermeyen H (card1+addr1) entity'lerinde D1 tanımlı satırlar için:
 
@@ -95,23 +102,37 @@ I/J'de ise kapsama yarıya düşüyor. D1n, entity anahtarına katılmak yerine 
 H içinde D1n ile ayrıştırılmış alt-entity'ye ancak görüldüyse düşme, görülmediyse H'ye geri düşme) kullanılabilir. I yalnızca bu
 hiyerarşik geri düşüşle anlamlıdır. Seçim kullanıcıya aitti: H seçildi (K-05, `configs/entity.yaml`).
 
-## Entity kararı (bekliyor)
-Önceki bölümde A-J seçenekleri ve öneri var; karar ana oturumda kullanıcıya sorulacak.
+## D1 anlamı testi (`scripts/check_d1_semantics.py`, `reports/profile/d1_semantics.csv|md`)
+Etiketsiz, tam veri, entity = H (`configs/entity.yaml`), seed 42, tolerans 1 gün (`configs/profiling.yaml: d1_semantics`).
+
+| Test | Ölçüm (bu betik) | Karıştırılmış D1 (şans düzeyi) | Önceki manuel ölçüm |
+|---|---|---|---|
+| A: "D1 = önceki işlemden beri gün": entity içinde bir önceki işlemle gün farkı ile D1 arasında \|fark - D1\| <= 1 (önceki işlemi olmayan satırlar paydan hariç; n = 549.367) | %34,4 | %33,4 | ~%30 |
+| B: "D1 = kart başlangıcından beri": (H, D1n) çifti daha önce görülmüş, tüm D1 tanımlı satırlar (n = 589.271) | %63,2 | %33,0 | ~%55 (karıştırılmış ~%26) |
+| B, yalnızca entity'de önceki işlemi olan satırlar (n = 549.367) | %67,8 | %35,4 | - |
+
+Sonuç: A hipotezi şansın üzerinde değil (%34,4, karıştırılmışta %33,4; şans düzeyinin yüksek olması muhtemelen D1 küçük değerlerinin sık görülmesinden kaynaklanır, doğrulanmadı). B hipotezi tutuyor:
+(H, D1n) çiftinin tekrar oranı karıştırılmışın yaklaşık 2 katı. Sayılar kullanıcının ölçümünden biraz farklı (B: %63 vs ~%55, karıştırılmış %33 vs ~%26);
+fark büyük olasılıkla payda ve karıştırma tanımından (burada karıştırma entity içinde, payda tüm D1 tanımlı satırlar) kaynaklanır, yön ve sonuç aynıdır.
+D1n'in H içinde değişmesi (sabitlik kontrolü) H'nin birden fazla kartı birleştirmesinden kaynaklanır: her kartın D1n'i sabit, H içinde birkaç kart var.
+Bu, D1 = kart yaşı yorumunu destekler ama kanıtlamaz (gerçek kart no yok).
 
 ## isFraud kullanımı
-Kullanıldı mı: **hayır**. Entity karşılaştırması, outlier, ilişki ve seyreklik analizleri etiketsizdir. `y` yalnızca fit/holdout
-taban oranını raporlamak için okundu (bkz. step1.md).
+Kullanıldı mı: **hayır**. Entity karşılaştırması, D1 testi, outlier, ilişki ve seyreklik analizleri etiketsizdir; `src/profiling/` etiketi hiç okumaz.
+Fit/holdout taban oranı `src/evaluation/base_rate.py` tarafından hesaplanır (bkz. step1.md).
 
 ## Bir sonraki adımın girdisi
-`reports/profile/entity_patterns.csv` (entity kararı için), `redundancy_clusters.csv` (V azaltma), `column_schema.parquet`,
-`rare_summary.csv` (nadirlik özelliği adayları).
+`redundancy_clusters.csv` (V azaltma; fit kümesinde hesaplandı), `column_schema.csv|parquet`, `rare_summary.csv` (nadirlik özelliği adayları),
+`outliers`/`distributions` (fit istatistikleri).
+**Not:** `*.parquet` dosyaları `.gitignore` içindedir; temiz klonda `column_schema.parquet` ve `merged.parquet` yoktur. Adım 3 csv'yi
+(`column_schema.csv`, `redundancy_clusters.csv`) okuyabilir ya da `make profile` ile yeniden üretir.
 Entity proxy kararı verildi (K-05): `configs/entity.yaml` içinde `card1 + addr1`, addr1 NaN ayrı seviye; tüm adımlar anahtarı oradan okur.
 `D1` anahtara girmez, Adım 3'te iki ayrı feature olarak kullanılır: kart yaşı `card_age_days = D1` (ilk kullanımdan bu yana geçen gün) ve kart başlangıç günü `D1n = floor(TransactionDT/86400) - D1`.
 Loader çıktısında `has_identity` kolonu ve `category` dtype'lar bulunur: Adım 3'te entity bazlı `groupby` işlemlerinde `observed=True` kullan
 (aksi halde kategorik kolonlarda gözlenmeyen kombinasyonlar için boş gruplar üretilir, bellek ve süre artar).
 
 ## Bilinen sınırlar
-- Spearman ve Cramér's V, tekrarlanabilir (seed 42) 100k satırlık rastgele örnek üzerindedir (hız içindir; split değildir); rank pairwise-complete
+- Spearman ve Cramér's V, fit kümesinden alınan tekrarlanabilir (seed 42) 100k satırlık rastgele örnek üzerindedir (hız içindir; split değildir); rank pairwise-complete
   yaklaşıktır. Kümeler V için tutarlıdır ama sınırdaki çiftler örnekle değişebilir.
 - Entity tutar varyansı ve "tek işlemli" oranı, entity'nin gerçek kişi olup olmadığını kanıtlamaz; yalnızca davranış tarihçesi yeterliliğini ölçer.
 - Rare eşiği (1e-4) ve küme eşiği (0,95) varsayılandır (`configs/profiling.yaml`); Adım 3'te gerekirse ayarlanır.

@@ -9,7 +9,7 @@ import pandas as pd
 
 from src.data.loader import add_datetime
 from src.profiling import distributions, entity, figures, quality, relations, schema
-from src.profiling.config import profiling_config
+from src.profiling.config import entity_definition, profiling_config
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,6 @@ def _save(df: pd.DataFrame, out_dir: Path, name: str, csv: bool = False) -> None
 
 def run_profile(
     X: pd.DataFrame,
-    y: pd.Series,
     join_stats: dict[str, int],
     out_dir: Path,
     fig_dir: Path,
@@ -42,8 +41,10 @@ def run_profile(
 ) -> dict:
     """Write all profile tables/figures for X (time-sorted, indexed by TransactionID).
 
-    y is used for one label-free-analysis exception only: the base fraud rate of the fit and
-    holdout sets (reported, never used for any selection).
+    Label-free: no target is passed in. Descriptive tables (schema, missing, quality, temporal,
+    entity table) use all rows. Statistics that later steps learn (outliers, distributions,
+    top-N, rare combinations, Spearman/Cramer relations, redundancy clusters) use the fit set
+    only (first fit_ratio rows by time).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     cfg = profiling_config()
@@ -51,6 +52,7 @@ def run_profile(
     time_col = settings["time"]["time_column"]
     fit_ratio = settings["split"]["fit_ratio"]
     cut = int(len(X) * fit_ratio)
+    Xf = X.iloc[:cut]  # fit set (view, no copy)
 
     log.info("schema")
     sch = schema.infer_schema(X, time_col=time_col, cfg=cfg["schema"])
@@ -75,9 +77,9 @@ def run_profile(
     ]
     numeric = sch[(sch["column"].isin(num_cols)) & (sch["inferred_type"] == "numeric")]["column"]
     numeric = numeric.tolist()
-    _save(distributions.outlier_table(X, numeric, cfg["outliers"]), out_dir, "outliers")
+    _save(distributions.outlier_table(Xf, numeric, cfg["outliers"]), out_dir, "outliers")
     _save(
-        distributions.numeric_distributions(X, numeric, cfg["distributions"]),
+        distributions.numeric_distributions(Xf, numeric, cfg["distributions"]),
         out_dir,
         "distributions",
     )
@@ -90,13 +92,13 @@ def run_profile(
         if not pd.api.types.is_numeric_dtype(X[c])
         or sch.set_index("column").loc[c, "type_source"] == "dictionary"
     ]
-    _save(distributions.categorical_topn(X, top_cols), out_dir, "categorical_topn")
+    _save(distributions.categorical_topn(Xf, top_cols), out_dir, "categorical_topn")
 
     log.info("rare categories")
     sets = [s for s in cfg["rare"]["key_sets"] if all(c in X.columns for c in s)]
     string_cols = [c for c in top_cols if not pd.api.types.is_numeric_dtype(X[c])]
     sets += [[c] for c in string_cols]
-    detail, rsum = distributions.rare_combinations(X, sets, cfg["rare"])
+    detail, rsum = distributions.rare_combinations(Xf, sets, cfg["rare"])
     _save(detail, out_dir, "rare_categories")
     _save(rsum, out_dir, "rare_summary", csv=True)
 
@@ -109,7 +111,7 @@ def run_profile(
         and sch_i.loc[c, "type_source"] != "dictionary"
         and sch_i.loc[c, "n_unique"] > 1
     ]
-    sp = relations.spearman_pairs(X, sp_cols, seed, cfg["relations"])
+    sp = relations.spearman_pairs(Xf, sp_cols, seed, cfg["relations"])
     cv_cols = [
         c
         for c in cat_cols
@@ -120,7 +122,7 @@ def run_profile(
             or sch_i.loc[c, "type_source"] == "dictionary"
         )
     ]
-    cv = relations.cramers_pairs(X, cv_cols, seed, cfg["relations"])
+    cv = relations.cramers_pairs(Xf, cv_cols, seed, cfg["relations"])
     rel = pd.concat([sp, cv], ignore_index=True)
     _save(rel, out_dir, "column_relations")
     clusters = relations.redundancy_clusters(rel, sch, cfg["relations"])
@@ -156,10 +158,10 @@ def run_profile(
     )
     temporal["ratio"] = temporal["count"] / len(X)
     _save(temporal, out_dir, "temporal")
-    days = (X[time_col] // cfg["entity"]["day_seconds"]).astype("int32")
+    days = (X[time_col] // entity_definition()["card_start_day"]["day_seconds"]).astype("int32")
     fig = cfg["figures"]
     figures.plot_null_by_group(gmiss, fig_dir / "null_by_group.png", fig)
-    figures.plot_amount_log(X[cfg["entity"]["amount_column"]], fig_dir / "amount_log.png", fig)
+    figures.plot_amount_log(Xf[cfg["entity"]["amount_column"]], fig_dir / "amount_log.png", fig)
     figures.plot_hourly_volume(
         pd.Series(dt.dt.hour.to_numpy()),
         pd.Series(days.to_numpy()),
@@ -173,10 +175,6 @@ def run_profile(
     }
     figures.plot_entity_counts(sizes, fig_dir / "entity_size_distribution.png", fig)
 
-    labels = {
-        "fit_base_rate": float(y.iloc[:cut].mean()),
-        "holdout_base_rate": float(y.iloc[cut:].mean()),
-    }
     result = {
         "schema": sch,
         "group_missing": gmiss,
@@ -185,7 +183,6 @@ def run_profile(
         "constancy": constancy,
         "clusters": clusters,
         "rare_summary": rsum,
-        "labels": labels,
         "join_stats": join_stats,
     }
     (out_dir / "summary.md").write_text(_summary(result, len(X), X.shape[1]), encoding="utf-8")
@@ -220,7 +217,5 @@ def _summary(res: dict, n_rows: int, n_cols: int) -> str:
         "\n## Kalite bulgulari\n" + _md_table(res["quality"].head(60)),
         "\n## Entity adaylari\n" + _md_table(ent[[c for c in cols if c in ent.columns]]),
         "\n## D1n sabitlik kontrolu\n" + _md_table(res["constancy"]),
-        "\n## Etiket taban orani (yalnizca raporlama)\n"
-        + "\n".join(f"- {k}: {v:.4f}" for k, v in res["labels"].items()),
     ]
     return "\n".join(parts) + "\n"

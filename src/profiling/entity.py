@@ -1,6 +1,7 @@
 """Entity proxy comparison. Label-free: isFraud is never read here.
 
-Candidates, derived columns and thresholds come from configs/profiling.yaml (`entity`).
+Candidates and thresholds come from configs/profiling.yaml (`entity`). The chosen entity and the
+D1n definition (name, D1 column, day_seconds) come from configs/entity.yaml only.
 """
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.profiling.config import profiling_config
+from src.profiling.config import entity_definition, profiling_config
 
 
 def entity_codes(
@@ -32,7 +33,11 @@ def entity_codes(
 
 
 def _scope_stats(
-    key: np.ndarray, log_amt: np.ndarray, dt: np.ndarray, holdout_seen: float | None
+    key: np.ndarray,
+    log_amt: np.ndarray,
+    dt: np.ndarray,
+    holdout_seen: float | None,
+    day_seconds: int,
 ) -> dict:
     """Entity statistics for one slice of rows. key is -1 for undefined rows."""
     defined = key >= 0
@@ -69,7 +74,7 @@ def _scope_stats(
     out["median_within_logamt_std"] = float(np.median(std_within)) if multi.any() else np.nan
     out["global_logamt_std"] = glob
     by_entity = pd.Series(t).groupby(inv)
-    span = (by_entity.max() - by_entity.min()).to_numpy()[multi] / 86400.0
+    span = (by_entity.max() - by_entity.min()).to_numpy()[multi] / day_seconds
     out["median_span_days"] = float(np.median(span)) if multi.any() else np.nan
     if holdout_seen is not None:
         out["holdout_seen_ratio"] = holdout_seen
@@ -85,21 +90,32 @@ def first_use_day(df: pd.DataFrame, time_col: str, d_col: str, day_seconds: int)
     return pd.Series(day - df[d_col].to_numpy(dtype="float64"), index=df.index)
 
 
+def resolve_candidates(cfg: dict) -> dict[str, dict]:
+    """Candidates from profiling.yaml; `from_entity_yaml: true` takes the chosen entity."""
+    chosen = entity_definition()
+    out = {}
+    for name, cand in cfg["candidates"].items():
+        if cand.get("from_entity_yaml"):
+            cand = {"columns": chosen["columns"], "na_level": chosen.get("na_level", [])}
+        out[name] = cand
+    return out
+
+
 def build_work_frame(df: pd.DataFrame, time_col: str, cfg: dict) -> pd.DataFrame:
     """Small frame with only the columns candidates need, plus the derived D1n column."""
-    derived = cfg["first_use_day"]
-    needed = {c for cand in cfg["candidates"].values() for c in cand["columns"]}
-    needed -= {derived["name"]}
+    start = entity_definition()["card_start_day"]
+    needed = {c for cand in resolve_candidates(cfg).values() for c in cand["columns"]}
+    needed -= {start["name"]}
     work = df[[c for c in needed if c in df.columns]].copy()
-    if derived["d_column"] in df.columns:
-        work[derived["name"]] = first_use_day(df, time_col, derived["d_column"], cfg["day_seconds"])
+    if start["d_column"] in df.columns:
+        work[start["name"]] = first_use_day(df, time_col, start["d_column"], start["day_seconds"])
     return work
 
 
 def candidate_keys(work: pd.DataFrame, cfg: dict) -> dict[str, np.ndarray]:
     """Entity code array per candidate whose columns all exist in work."""
     keys = {}
-    for name, cand in cfg["candidates"].items():
+    for name, cand in resolve_candidates(cfg).items():
         if all(c in work.columns for c in cand["columns"]):
             keys[name] = entity_codes(work, cand["columns"], cand.get("na_level"))
     return keys
@@ -120,11 +136,13 @@ def compare_candidates(
     work = build_work_frame(df, time_col, cfg)
     keys = candidate_keys(work, cfg)
     cut = int(len(df) * fit_ratio)
+    day_seconds = entity_definition()["card_start_day"]["day_seconds"]
+    cands = resolve_candidates(cfg)
     log_amt = np.log1p(df[cfg["amount_column"]].to_numpy(dtype="float64"))
     dt = df[time_col].to_numpy(dtype="float64")
     rows = []
     for name, key in keys.items():
-        if not cfg["candidates"][name].get("table", True):
+        if not cands[name].get("table", True):
             continue
         fit_keys, hold_keys = key[:cut], key[cut:]
         hold_def = hold_keys[hold_keys >= 0]
@@ -139,10 +157,10 @@ def compare_candidates(
         ):
             row = {
                 "candidate": name,
-                "columns": "+".join(cfg["candidates"][name]["columns"]),
+                "columns": "+".join(cands[name]["columns"]),
                 "scope": scope,
             }
-            row.update(_scope_stats(key[sl], log_amt[sl], dt[sl], extra))
+            row.update(_scope_stats(key[sl], log_amt[sl], dt[sl], extra, day_seconds))
             rows.append(row)
     return pd.DataFrame(rows), keys
 
@@ -161,7 +179,7 @@ def d1n_constancy(
     cfg = cfg or profiling_config("entity")
     chk = cfg["constancy"]
     tol = chk["tolerance_days"]
-    d1n = work[cfg["first_use_day"]["name"]]
+    d1n = work[entity_definition()["card_start_day"]["name"]]
     rows = []
     for level in chk["levels"]:
         key = keys[level]

@@ -1,0 +1,4 @@
+scope,n_rows,n_positive,base_rate
+all,50000,1357,0.02714
+fit,40000,1129,0.028225
+holdout,10000,228,0.0228

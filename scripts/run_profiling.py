@@ -23,6 +23,7 @@ from src.core.config import (  # noqa: E402
     set_seed,
 )
 from src.data.loader import load_merged  # noqa: E402
+from src.evaluation.base_rate import label_base_rates  # noqa: E402
 from src.profiling.report import run_profile  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -58,7 +59,11 @@ def main() -> int:
     X.to_parquet(PROCESSED_DIR / f"merged{sample}.parquet")
     log.info("merged parquet written, peak RSS %.0f MB", peak_rss_mb())
 
-    run_profile(X, y, stats, out_dir, fig_dir, settings, seed=settings["seed"])
+    run_profile(X, stats, out_dir, fig_dir, settings, seed=settings["seed"])
+    # Label base rates come from src/evaluation (profiling never reads y); reporting only.
+    rates = label_base_rates(y, settings["split"]["fit_ratio"])
+    rates.to_csv(out_dir / "label_base_rate.csv", index=False)
+    log.info("label base rates:\n%s", rates.to_string())
     log.info("DONE in %.1f s, peak RSS %.0f MB", time.time() - t0, peak_rss_mb())
     return 0
 

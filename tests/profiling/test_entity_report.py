@@ -88,9 +88,8 @@ def test_d1n_constancy_groups():
 
 def test_run_profile_writes_outputs(frame, tmp_path):
     settings = load_settings()
-    y = pd.Series(0, index=frame.index, dtype="int8")
     stats = {"transaction_rows": len(frame)}
-    res = run_profile(frame, y, stats, tmp_path / "p", tmp_path / "f", settings)
+    res = run_profile(frame, stats, tmp_path / "p", tmp_path / "f", settings)
     for name in [
         "column_schema",
         "missing",

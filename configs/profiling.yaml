@@ -45,9 +45,8 @@ relations:
 
 entity:
   amount_column: TransactionAmt
-  day_seconds: 86400
-  # D1n = floor(TransactionDT / day_seconds) - D1  (approximate first-use day of the card)
-  first_use_day: {name: D1n, d_column: D1}
+  # D1n (name, D1 column, day_seconds) and the chosen entity are defined only in configs/entity.yaml.
+  # Candidate columns may use the name D1n. from_entity_yaml: true copies the chosen entity.
   # na_level: columns where NaN becomes its own level instead of an undefined row.
   candidates:
     A_card1: {columns: [card1]}
@@ -57,13 +56,13 @@ entity:
     E_card1_addr1_Pemail: {columns: [card1, addr1, P_emaildomain]}
     F_card1_addr1_DeviceInfo: {columns: [card1, addr1, DeviceInfo]}
     G_card1_Pemail: {columns: [card1, P_emaildomain]}
-    H_card1_addr1_na_level: {columns: [card1, addr1], na_level: [addr1]}
+    H_card1_addr1_na_level: {from_entity_yaml: true}
     I_card1_addr1_D1n: {columns: [card1, addr1, D1n], na_level: [addr1, D1n]}
     J_card1_addr1_Pemail_D1n:
       columns: [card1, addr1, P_emaildomain, D1n]
       na_level: [addr1, P_emaildomain, D1n]
-  # Reference for the D1n constancy check only (table: false keeps it out of the comparison
-  # table): a strict "same card" key; if D1n is a stable card attribute it must be ~constant here.
+    # Reference for the D1n constancy check only (table: false keeps it out of the comparison
+    # table): a strict "same card" key; if D1n is a stable card attribute it must be ~constant.
     REF_card_full_addr1:
       columns: [card1, card2, card3, card4, card5, card6, addr1]
       na_level: [card2, card3, card4, card5, card6, addr1]
@@ -72,6 +71,9 @@ entity:
   constancy:
     levels: [H_card1_addr1_na_level, REF_card_full_addr1, I_card1_addr1_D1n]
     tolerance_days: 1
+
+d1_semantics:
+  tolerance_days: 1            # |gap - D1| <= tolerance counts as a match
 
 figures:
   dpi: 120
