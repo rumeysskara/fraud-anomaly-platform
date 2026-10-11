@@ -3,7 +3,7 @@
 ## Ortak arayüzler (src/core/interfaces.py, ABC / Protocol)
 - `Detector`: `fit(df) -> self`, `score(df) -> pd.Series` ([0,1]), `explain(row) -> dict`
 - `Aggregator`: `aggregate(scores: dict[str, pd.Series]) -> pd.Series`
-- `ContextAdjuster`: `adjust(df, raw_score) -> AdjustedResult`
+- `ContextAdjuster`: `adjust_batch(df, raw_score) -> DataFrame` ve `adjust_one(record, raw_score) -> AdjustedResult`; ortak mantık paylaşılır (K-01)
 - `RuleEvaluator`: `evaluate(record, anomaly_score) -> RuleResult`
 - `Retriever`: `retrieve(query, k) -> list[Chunk]`
 - `LLMClient`: `generate(prompt, context) -> str` (Ollama implementasyonu)

@@ -1,0 +1,20 @@
+# Project-wide constants. All agents read these values; do not hardcode elsewhere.
+seed: 42
+
+time:
+  # Assumption: TransactionDT is a second offset; datetime = reference_date + TransactionDT.
+  reference_date: "2017-12-01 00:00:00"
+  time_column: TransactionDT
+
+split:
+  fit_ratio: 0.8   # first 80% by TransactionDT = fit, last 20% = holdout
+
+data:
+  id_column: TransactionID
+  label_column: isFraud
+  transaction_file: train_transaction.csv
+  identity_file: train_identity.csv
+
+evaluation:
+  # Alarm budgets as fraction of holdout rows (top-k by score).
+  alarm_budgets: [0.01, 0.05]
