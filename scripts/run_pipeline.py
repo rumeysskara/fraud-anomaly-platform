@@ -17,7 +17,7 @@ from src.core.config import set_seed  # noqa: E402
 STEPS: dict[str, str] = {
     "profile": "scripts/run_profiling.py",
     "features": "scripts/build_features.py",
-    "score": "scripts/score_anomalies.py",
+    "score": "scripts/run_scoring.py",
     "context": "scripts/adjust_context.py",
     "rules": "scripts/apply_rules.py",
     "index": "scripts/build_index.py",

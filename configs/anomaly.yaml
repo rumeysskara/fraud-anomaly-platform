@@ -1,0 +1,102 @@
+# Step 4-5 settings (anomaly layers). Decisions: docs/decisions.md K-11 ... K-18.
+# Layer weights live in configs/weights.yaml. Seed and split come from configs/settings.yaml.
+
+common:
+  # -1 marks "no history" in these features (Step 3); the layers treat it as missing (K-11).
+  sentinel_to_nan: [time_since_last_txn, avg_inter_arrival]
+  # Never an anomaly input: absolute time position (drifts with the calendar), K-18.
+  drop_always: [day_index, card_start_day]
+  # Lifetime cumulative entity columns (grow with time since first sighting): removed from
+  # multivariate and column input (K-18, corrected). Windowed columns (ent_cnt_*, ent_sum_*) are
+  # NOT cumulative and stay in multivariate. The entity layer uses ent_avg_amt / ent_std_amt /
+  # device_ent_match; ent_txn_count is used only for the shrinkage weight w.
+  drop_cumulative:
+    - ent_txn_count
+    - ent_avg_amt
+    - ent_max_amt
+    - ent_std_amt
+    - ent_age_days
+    - ent_unique_device
+    - ent_unique_email
+    - device_ent_match
+
+normalization:
+  # Quantile table (K-16): grid points, ties get the mean rank, np.interp at score time.
+  grid_points: 1001
+
+preprocess:
+  # Signed log applied to columns with |skewness| above the threshold, then fit p0.1 / p99.9 clip (K-11).
+  skew_threshold: 5.0
+  clip_quantiles: [0.001, 0.999]
+  # Multivariate: NaN -> fit median plus a missing flag for columns that had NaN in fit.
+  na_flag_min_rate: 0.0
+
+column:
+  top_k: 3                   # row score = mean of the k highest column scores (K-12)
+  discrete_max_unique: 10    # columns with at most this many fit values use -log10(frequency)
+  # Curated explainable subset (no V). Reason: with many columns the top-3 mean saturates from
+  # multiple comparisons and the explanation becomes meaningless (K-12).
+  columns:
+    - amt_log
+    - amt_n_decimals
+    - amt_fit_freq
+    - amt_vs_product_q
+    - amt_dev_card4_card6
+    - amt_dev_addr1
+    - dist1_log
+    - dist2_log
+    - freq_card1
+    - freq_addr1
+    - freq_P_emaildomain
+    - freq_R_emaildomain
+    - freq_DeviceInfo
+    - freq_id_30
+    - freq_id_31
+    - freq_id_33
+    - C1
+    - C2
+    - C6
+    - C11
+    - C13
+    - C14
+    - D4
+    - D10
+    - D15
+    - time_since_last_txn
+    - amt_ratio_to_ent_avg
+    - amt_zscore_ent
+
+multivariate:
+  # IF-core input (K-13): engineered groups (catalog model_input = true) + C + D, minus the exclusions above.
+  core:
+    groups: [temporal, entity, relational, context]
+    passthrough_patterns: ['^C\d+$', '^D\d+$']
+  # IF-full adds the V cluster representatives; ablation only, never part of the main score.
+  full_extra_patterns: ['^V\d+$']
+  isolation_forest:
+    n_estimators: 200
+    max_samples: 256
+    contamination: auto
+    n_jobs: -1
+  explain_top: 5
+
+entity:
+  shrinkage_k: 5             # w = n / (n + k); w = 0 for the first transaction (K-14)
+  count_column: ent_txn_count   # used ONLY for w
+
+temporal:
+  # Sub-score weights (plain mean, K-15). Normalized to sum 1 at load time.
+  subscore_weights:
+    velocity: 0.2
+    inter_arrival: 0.2
+    low_volume_window: 0.2
+    hour_rarity: 0.2
+    baseline_volume: 0.2
+  velocity_columns: [ent_cnt_1h, ent_cnt_24h, ent_sum_1h]
+  hour_shrinkage_k: 5        # entity hour histogram is pulled to the global hour share with this strength
+  hours_per_day: 24
+  days_per_week: 7
+
+aggregation:
+  # Alternative aggregators are used in the ablation table only (K-17).
+  noisy_or_clip: 0.999999

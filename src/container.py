@@ -6,6 +6,7 @@ from dependency_injector import containers, providers
 
 from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
 from src.features.pipeline import FeaturePipeline
+from src.scoring.service import ScoringService
 
 
 class Container(containers.DeclarativeContainer):
@@ -19,6 +20,9 @@ class Container(containers.DeclarativeContainer):
         ARTIFACTS_DIR / "feature_pipeline.joblib",
         ARTIFACTS_DIR / "entity_profiles.parquet",
     )
+
+    # Step 4-5: fitted anomaly layers + weights + normalization tables (loaded, never trained).
+    scoring_service = providers.Singleton(ScoringService.load, ARTIFACTS_DIR / "detectors")
 
 
 def create_container() -> Container:

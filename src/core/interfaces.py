@@ -35,6 +35,18 @@ class Aggregator(ABC):
         """Return the combined score in [0,1]."""
 
 
+class Normalizer(ABC):
+    """Maps raw layer scores to [0,1] with a table learned on the fit set (Step 5)."""
+
+    @abstractmethod
+    def fit(self, raw: np.ndarray) -> Normalizer:
+        """Learn the mapping from fit-set raw scores."""
+
+    @abstractmethod
+    def transform(self, raw: np.ndarray) -> np.ndarray:
+        """Return normalized scores in [0,1]."""
+
+
 class ContextAdjuster(ABC):
     """Adjusts a raw anomaly score using context."""
 
