@@ -124,3 +124,8 @@ Kararları geliştirici verir; Claude Code seçenekleri sunar.
 - **Sonuç (holdout):** %1: FP 995 / 1.040 / 983, %5: FP 5.222 / 5.291 / 5.068 (Adım 5 / ilk tasarım / revize). PR-AUC 0,081 / 0,078 / 0,094. Eski ve yeni sonuçlar `docs/step6.md` ve `reports/context/` içinde birlikte duruyor.
 - **Alternatifler:** İlk C4'ü korumak; C4'ü tamamen kaldırmak; cihaz koşulunu VEYA yapmak; kırpılmış skorla sıralayıp ham toplamla eşitlik kırmak.
 - **Neden seçildi:** Kapsam etiketsiz bir ölçüdür ve eşikler fit'ten öğrenilir. Çift sayım (C6b + C9a = x1,21) iş mantığına aykırıydı. Kırpılmamış sıralama 1,0'daki yığında (revize: 2.682 satır) sıra bilgisinin kaybolmasını önler. Ablation'da holdout'ta zararlı görünen C1, C2, C3 etiketle ayar yasağı nedeniyle değiştirilmedi.
+
+### K-20b: Revize context tasarımının kabulü
+- **Karar:** (1) C4 olduğu gibi kalır: bilinen cihaz VE bilinen e-posta; kapsam fit'te %2,0 (hedef %10-15'in altında). (2) C1, C2, C3 değiştirilmez. Holdout ablation'da zararlı göründüler; bu `docs/step6.md` içinde "bilinen sınır" olarak kayıtlı.
+- **Alternatifler:** (a) C4'te cihaz koşulunu VEYA yapıp kapsamı hedefe yaklaştırmak; (b) C1-C3'ü holdout ablation sonucuna göre kaldırmak ya da zayıflatmak.
+- **Neden seçildi:** (a) kapsam hedefine ulaşmak için seçilmiş bir tanım olurdu; VE, "trusted = güçlü kanıtlı azınlık" ilkesine daha uygun. (b) holdout etiketine göre ayar olurdu (sızıntı). Doğru yöntem, bu kuralları holdout'tan ayrı bir doğrulama döneminde test etmektir; gelecek iş olarak bırakıldı.

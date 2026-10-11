@@ -230,7 +230,7 @@ Kırpılmamış sıralamada kesimlerde eşitlik yok (1 = yalnızca kesimdeki sat
 "Yalnızca X" satırları da dosyadadır. Yorum (betimleyici; kurallar bu tabloya göre değiştirilmedi):
 - C4 artık zarar kaynağı değil: %1'de hafif yardım (çıkarınca FP 983 -> 986), %5'te hafif zarar (5.068 -> 5.030). Etkisi küçük, çünkü yalnızca holdout'un %4'üne dokunuyor.
 - En çok yardım eden C9 (çıkarınca %5'te FP +50); yönü fit EDA etiket tablosuyla uyumlu olduğu için bu katkı tamamen etiketsiz kanıt sayılmamalı.
-- C3, C1 ve C2 çıkarıldığında metrikler iyileşiyor (en belirgin C3: %1'de FP 983 -> 939). Bunlar sonraki karar adayları; etiketle ayar yasağı nedeniyle bu adımda değiştirilmedi.
+- C3, C1 ve C2 çıkarıldığında metrikler iyileşiyor (en belirgin C3: %1'de FP 983 -> 939). Etiketle ayar yasağı nedeniyle değiştirilmedi (kullanıcı kararı, K-20b; bkz. Bilinen sınırlar).
 - C5 ve C7 etkisiz (nedenler ilk tasarım bölümünde); koruma %5'te küçük fayda (5.072 -> 5.068); sınırlar sıralamayı değiştirmiyor.
 
 ### Düzeltmede eklenen testler
@@ -246,13 +246,14 @@ C4'ün her koşulunun tek tek gerekli olması (yalnızca e-posta / yalnızca cih
 7. **Öğrenilen parametrelerin yeri:** ilk koşuda `reports/context/` altındaydı (yazma alanı nedeniyle); düzeltmede kullanıcı izniyle `artifacts/context/`'e taşındı (`paths.params_dir`), eski dosya silindi.
 
 ## Bilinen sınırlar
-- Holdout'ta FP artıyor (yukarıda); C4 eşiği kart-grubu entity proxy'si için fazla geniş. Kurallar etiketle ayarlanmadı; değişiklik kullanıcı kararıdır.
-- C6b ile C9a çoğunlukla aynı satırları artırır (çift sayım, fiilen x1,21).
-- 1,0'da doyma: 2.006 holdout satırı; üst dilim içinde sıra yalnızca eşitlik kırıcıdan gelir.
+- **C1, C2, C3 holdout ablation'da zararlı göründü** (çıkarılınca %1'de FP 983 -> 969 / 966 / 939). Etiketle ayar yasağı nedeniyle değiştirilmedi (kullanıcı kararı, K-20b). Doğru yöntem: bu kuralları holdout'tan ayrı bir doğrulama döneminde (ör. fit'in son dilimi veya yeni bir zaman penceresi) test etmek ve karar orada vermek; holdout yalnızca son raporlama içindir.
+- **C4 kapsamı hedefin altında:** fit %2,0 / holdout %4,0 (hedef %10-15). Sınırlayan koşul "bilinen cihaz" (identity kaydı olan işlemlerle sınırlı). Tanım (VE) kullanıcı kararıyla korundu (K-20b).
+- **Revize sonuçtaki iyileşme küçük** (%1'de -12, %5'te -154 FP) ve tek bir holdout üzerinde; güven aralığı hesaplanmadı. Sonuç etiketsiz bir tanım düzeltmesinden gelse de sorun holdout sonucunda fark edildi (K-20a).
+- 1,0'da yığılma (gösterim): revize tasarımda 2.682 holdout satırı; sıralama kırpılmamış skorla yapıldığı için kesimde eşitlik yok.
+- İlk tasarıma ait sınırlar (C4'ün holdout'un %61'ini "güvenilir" sayması, C6b + C9a çift sayımı, 1,0'da 2.006 satır ve eşitlik kırıcıya bağımlı sıralama) düzeltmede giderildi; kayıt için yukarıdaki ilk tasarım bölümlerinde duruyor.
 - C7 holdout'ta ölçülemez (sezon fit'te); C5 Adım 5'teki burst entity'sini hedeflediği halde onu yakalamaz (burst kendi geçmişine göre gerçek bir değişim).
 - Saat dilimi, hafta sonu, addr2 = ABD, 3 ondalık = kur çevrimi ve D1 = kart yaşı varsayımdır (docs/assumptions.md 1-7); C1, C2, C3, C6, C8 bunlara bağlıdır.
 - Online yolda kayıt şu alanları taşımalıdır: yukarıdaki girdi kolonları + `email_ent_known` + dört katman skoru; eksik kolon `KeyError` verir (sessizce yanlış tetiklenme olmasın diye).
-- `scripts/run_pipeline.py` içindeki context adımı hâlâ `scripts/adjust_context.py`'yi gösterir; bu adımın yazma alanı dışında olduğu için bağlanmadı (aşağıda).
 
 ## Testler (tests/context, ilk tasarımda 30, düzeltme sonrası 38 test)
 Her kural için tetiklenen/tetiklenmeyen durum (C1-C4, C6a, C6b, C8, C9a, C9b parametreli; C5 burst ve düşük temporal; C7 baskın katman), nötr kayıt değişmez, koruma skoru ham skorda tutar ama artışı engellemez, üst/alt sınır ve [0,1] kırpma, **batch = tek kayıt** (300 rastgele satır, skor ve uygulanan kural listesi eşit; her kural en az bir kez tetiklenir), çıktı şeması ve açıklama alanları, eksik girdi kolonu hatası, config doğrulama (yinelenen id, bilinmeyen kolon), en az 6 gerekçeli kural, NaN karşılaştırması, parametre fit + JSON gidiş-dönüş, `email_ent_known`'un yalnızca önceki satırları kullanması, eşitlik kırıcı, ablation varyant sayısı, `src/context`'te `isFraud` geçmemesi, container provider'ı.
