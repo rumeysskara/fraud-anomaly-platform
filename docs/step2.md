@@ -91,9 +91,9 @@ Soru: aynı entity içinde D1n sabit mi (±1 gün tolerans)? D1n'i içermeyen H 
 | J +P_emaildomain | En ince; tutar std 0,29 | I'nin tüm eksileri daha ağır: holdout görülme %39,9, geçmiş %53,6, tek işlemli satır %30,1 |
 
 Öneri: **H**, entity istatistikleri (fit'te öğren, holdout'ta uygula) için birincil proxy. Gerekçe: holdout'ta %95,8 kapsama ve %93 geçmiş,
-I/J'de ise kapsama yarıya düşüyor. D1n, entity anahtarına katılmak yerine ikincil bir sinyal olarak (örn. "kart yaşı" = işlem günü - D1, ya da
+I/J'de ise kapsama yarıya düşüyor. D1n, entity anahtarına katılmak yerine ikincil bir sinyal olarak (örn. kart yaşı = D1 ve kart başlangıç günü D1n = işlem günü - D1, ya da
 H içinde D1n ile ayrıştırılmış alt-entity'ye ancak görüldüyse düşme, görülmediyse H'ye geri düşme) kullanılabilir. I yalnızca bu
-hiyerarşik geri düşüşle anlamlıdır. Seçim kullanıcıdadır; `configs/entity.yaml` ve `docs/decisions.md` bu adımda yazılmadı.
+hiyerarşik geri düşüşle anlamlıdır. Seçim kullanıcıya aitti: H seçildi (K-05, `configs/entity.yaml`).
 
 ## Entity kararı (bekliyor)
 Önceki bölümde A-J seçenekleri ve öneri var; karar ana oturumda kullanıcıya sorulacak.
@@ -106,7 +106,7 @@ taban oranını raporlamak için okundu (bkz. step1.md).
 `reports/profile/entity_patterns.csv` (entity kararı için), `redundancy_clusters.csv` (V azaltma), `column_schema.parquet`,
 `rare_summary.csv` (nadirlik özelliği adayları).
 Entity proxy kararı verildi (K-05): `configs/entity.yaml` içinde `card1 + addr1`, addr1 NaN ayrı seviye; tüm adımlar anahtarı oradan okur.
-`D1` anahtara girmez, Adım 3'te `card_age_days = floor(TransactionDT/86400) - D1` feature'ı olarak kullanılır.
+`D1` anahtara girmez, Adım 3'te iki ayrı feature olarak kullanılır: kart yaşı `card_age_days = D1` (ilk kullanımdan bu yana geçen gün) ve kart başlangıç günü `D1n = floor(TransactionDT/86400) - D1`.
 Loader çıktısında `has_identity` kolonu ve `category` dtype'lar bulunur: Adım 3'te entity bazlı `groupby` işlemlerinde `observed=True` kullan
 (aksi halde kategorik kolonlarda gözlenmeyen kombinasyonlar için boş gruplar üretilir, bellek ve süre artar).
 
