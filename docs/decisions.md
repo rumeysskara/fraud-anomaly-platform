@@ -27,4 +27,9 @@ Kararları geliştirici verir; Claude Code seçenekleri sunar.
 - **Alternatifler:** CSV'yi tam okuyup sıralamak ve kesmek.
 - **Neden seçildi:** Geliştirme modunda bellek ve süre N ile orantılı olur. Varsayım: dosya zamana göre sıralı; loader yine de okunan satırları sıralar.
 
+### K-04: RAG chunking stratejisi
+- **Karar:** Yapıya duyarlı chunking: markdown `markdown-it-py` ile ağaç yapısına çevrilip başlık sınırlarından bölünür; `rules.yaml`'daki her kural ayrı chunk, kural ID'si metadata'da; uzun bölümler token sınırıyla ikiye ayrılır.
+- **Alternatifler:** Sabit boyutlu (token/karakter) chunking, overlap'li.
+- **Neden seçildi:** Politika dokümanları başlıklarla yapılandırılmış; başlık sınırı anlam bütünlüğünü korur. Kural bazlı chunk + `rule_id` metadata, tetiklenen kural ID'sine göre filtreli retrieval ve kaynak gösterimini mümkün kılar.
+
 (Sıradaki kararlar: entity proxy, anomali yöntemleri ve ağırlıkları.)

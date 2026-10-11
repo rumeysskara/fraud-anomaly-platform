@@ -21,7 +21,11 @@ istisnaları, gece/hafta sonu politikası, manuel inceleme (review) prosedürü,
 Her dokümanda başlık, politika ID, ilgili kural ID'leri bulunur (retrieval kalitesini artırır).
 
 ## Pipeline
-1. **Chunking**: başlığa göre bölme, 200-400 token, küçük overlap, metadata (doc, policy_id, rule_ids).
+1. **Chunking** (yapıya duyarlı, bkz. K-04):
+   - Markdown dokümanlar `markdown-it-py` ile token/ağaç yapısına çevrilir ve başlık (heading) sınırlarından bölünür; her chunk kendi başlık yolunu taşır.
+   - `configs/rules.yaml` içindeki her kural ayrı bir chunk olur; kural ID'si metadata'da (`rule_id`) tutulur.
+   - Uzun bölümler token sınırıyla ikiye ayrılır (tercihen paragraf sınırında, küçük overlap ile); chunk başına hedef 200-400 token.
+   - Metadata: doc, heading_path, policy_id, rule_ids / rule_id.
 2. **Embedding**: Ollama `nomic-embed-text` (veya local sentence-transformers). Embedder arayüzle soyutlanır.
 3. **Vector search**: FAISS (cosine / inner product normalize) veya Chroma; top-k (k=3-5) + opsiyonel
    metadata filtresi (tetiklenen kural ID'leri).

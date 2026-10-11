@@ -11,6 +11,7 @@ fastapi
 uvicorn[standard]
 dependency-injector
 faiss-cpu
+markdown-it-py
 ollama
 httpx
 matplotlib
