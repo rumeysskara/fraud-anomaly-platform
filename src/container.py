@@ -4,13 +4,21 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
-from src.core.config import CONFIG_DIR
+from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
+from src.features.pipeline import FeaturePipeline
 
 
 class Container(containers.DeclarativeContainer):
     """Single application container (providers are added by later steps)."""
 
     config = providers.Configuration()
+
+    # Step 3: fitted feature pipeline + entity store (loaded lazily; the API never trains).
+    feature_pipeline = providers.Singleton(
+        FeaturePipeline.load,
+        ARTIFACTS_DIR / "feature_pipeline.joblib",
+        ARTIFACTS_DIR / "entity_profiles.parquet",
+    )
 
 
 def create_container() -> Container:

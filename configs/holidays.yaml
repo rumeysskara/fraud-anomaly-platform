@@ -1,0 +1,23 @@
+# US federal holidays used by the Step 3 calendar features (no extra library).
+# The data spans 2017-12-01 + ~183 days under the reference-date assumption; years 2017-2019 are listed.
+holidays:
+  - {date: 2017-01-01, name: New Year's Day}
+  - {date: 2017-01-16, name: Martin Luther King Jr. Day}
+  - {date: 2017-02-20, name: Presidents' Day}
+  - {date: 2017-05-29, name: Memorial Day}
+  - {date: 2017-12-25, name: Christmas Day}
+  - {date: 2018-01-01, name: New Year's Day}
+  - {date: 2018-01-15, name: Martin Luther King Jr. Day}
+  - {date: 2018-02-19, name: Presidents' Day}
+  - {date: 2018-05-28, name: Memorial Day}
+  - {date: 2018-12-25, name: Christmas Day}
+  - {date: 2019-01-01, name: New Year's Day}
+  - {date: 2019-01-21, name: Martin Luther King Jr. Day}
+  - {date: 2019-02-18, name: Presidents' Day}
+  - {date: 2019-05-27, name: Memorial Day}
+
+# ---- learned on the fit set by scripts/build_features.py (do not edit by hand) ----
+learned_season:
+  season_start_date: '2017-12-19'
+  season_end_date: '2017-12-26'
+  season_mean_ratio: 1.408

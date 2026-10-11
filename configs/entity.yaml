@@ -13,3 +13,65 @@ entity:
     name: D1n
     d_column: D1
     day_seconds: 86400
+
+# ---- Step 3 feature settings (static; read by src/features) ----
+features:
+  # Velocity windows in seconds (decision K-07: no 30d window).
+  windows: {1h: 3600, 6h: 21600, 24h: 86400, 7d: 604800}
+  # Low-volume window: the consecutive `length_hours` hours with the lowest fit volume (K-06).
+  low_volume:
+    length_hours: 6
+  local_time:
+    # ASSUMPTION: the low-volume window is local 00:00-06:00. local_hour_est = (hour - window_start) mod 24.
+    # null = derive from the fit window start (see `learned:` below); a number overrides it.
+    offset_override_hours: null
+    business_start_hour: 9     # local hour, inclusive
+    business_end_hour: 18      # local hour, exclusive
+  holidays:
+    file: holidays.yaml
+    # holiday_season is learned from FIT daily volume (decision K-10), not a fixed calendar window:
+    # ratio_d = daily volume / centered median of the surrounding `baseline_days` days;
+    # days with ratio_d >= ratio_threshold form consecutive blocks; blocks shorter than `min_days`
+    # are ignored; the block with the largest sum of (ratio_d - 1) is the season.
+    # (A 7-day baseline cannot see an 8-day peak: the peak days dominate their own median.)
+    season:
+      baseline_days: 29
+      ratio_threshold: 1.25
+      min_days: 3
+      sensitivity: {min: 1.20, max: 1.30, step: 0.01}   # threshold sweep for the sensitivity report
+      compare_fixed: ["2017-12-20", "2018-01-02"]   # old fixed window, report comparison only
+  # Columns kept in features.parquet but excluded from Step 4 model input (catalog.model_input).
+  model_input_exclude:
+    is_holiday: "US federal holiday days show no volume difference (daily volume ratio 1.00 in fit)"
+    days_to_nearest_holiday: "derived from the same holiday list as is_holiday (K-10)"
+  # "Small amount" for the card-testing signal = this fit quantile of TransactionAmt (K-08).
+  small_amount:
+    quantile: 0.10
+    window: 1h                 # must be one of `windows`; feature name = small_amt_streak_<window>
+  amount:
+    common_top_n: 20           # amt_is_common: among the N most frequent fit amounts
+    group_min_rows: 30         # group mean/std needs at least this many fit rows
+    group_std_floor: 0.1       # floor of the group log-amount std
+    z_std_floor: 1.0           # floor of the entity std (USD) in amt_zscore_ent
+  freq_columns: [card1, addr1, P_emaildomain, R_emaildomain, DeviceInfo, id_30, id_31, id_33]
+  rare_combo:
+    columns: [id_30, id_31]
+    ratio: 0.0001              # fit share below this (or unseen) = rare
+  history:
+    device_column: DeviceInfo
+    email_column: P_emaildomain
+  passthrough:
+    groups: [V, C, D]
+    exclude: [D1]              # D1 is already card_age_days
+    clusters_file: reports/profile/redundancy_clusters.csv
+
+# ---- learned on the fit set by scripts/build_features.py (do not edit by hand) ----
+learned:
+  low_volume_start_hour: 6
+  local_offset_hours: -6
+  small_amt_threshold: 25.95
+  dominant_addr2: 87.0
+  season_start_date: '2017-12-19'
+  season_end_date: '2017-12-26'
+  season_mean_ratio: 1.408
+  n_fit: 472432
