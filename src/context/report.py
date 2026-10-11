@@ -11,8 +11,10 @@ from collections.abc import Callable
 import numpy as np
 import pandas as pd
 
+from src.context.conditions import eval_clause
 from src.context.config import ContextConfig
-from src.context.engine import ADJUSTED_SCORE, FACTOR_PREFIX, ContextAdjustEngine
+from src.context.engine import FACTOR_PREFIX, UNCLIPPED, ContextAdjustEngine
+from src.context.params import ContextParams
 
 
 def tie_break_order(tiebreak: pd.Series) -> pd.Index:
@@ -87,6 +89,45 @@ def alarm_composition(
     return pd.DataFrame(rows)
 
 
+def condition_coverage(
+    data: pd.DataFrame, rule_id: str, cfg: ContextConfig, params: ContextParams, parts: dict
+) -> pd.DataFrame:
+    """Label-free share of rows meeting each clause of a rule alone and all clauses together.
+
+    `data` must already contain the derived columns (src/context/derive.add_derived).
+    """
+    rule = next(r for r in cfg.rules if r.id == rule_id)
+    clauses = rule.condition["all"]
+    rows = []
+    for clause in [*clauses, None]:
+        if clause is None:
+            label = "combined (all clauses)"
+        else:
+            value = clause.get("value")
+            if isinstance(value, dict) and "param" in value:
+                value = f"{value['param']} = {params.get(value['param'])}"
+            label = f"{clause['feature']} {clause['op']} {value if value is not None else ''}"
+        row: dict[str, object] = {"rule": rule_id, "clause": label.strip()}
+        for part, idx in parts.items():
+            sub = data.loc[idx]
+            if clause is None:
+                mask = np.ones(len(sub), dtype=bool)
+                for c in clauses:
+                    mask &= eval_clause(sub, c, params)
+            else:
+                mask = eval_clause(sub, clause, params)
+            row[f"{part}_share"] = float(mask.mean())
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def ties_at_cut(score: pd.Series, budget: float) -> int:
+    """Number of rows whose score equals the score at the top-k cut (k = ceil(budget * n))."""
+    k = math.ceil(budget * len(score))
+    cut = np.sort(score.to_numpy())[::-1][k - 1]
+    return int((score.to_numpy() == cut).sum())
+
+
 def ablation_variants(cfg: ContextConfig) -> list[tuple[str, str, ContextConfig]]:
     """(kind, label, config) for: full, leave-one-group-out, only-one-group, no guard, no bounds."""
     groups = cfg.groups()
@@ -117,5 +158,5 @@ def run_ablation(
     rows = [{"kind": "baseline", "variant": "no context (raw)", **evaluate(raw_score)}]
     for kind, label, cfg in ablation_variants(engine.cfg):
         res = engine.with_config(cfg).adjust_batch(inputs, raw_score, explain=False)
-        rows.append({"kind": kind, "variant": label, **evaluate(res[ADJUSTED_SCORE])})
+        rows.append({"kind": kind, "variant": label, **evaluate(res[UNCLIPPED])})
     return pd.DataFrame(rows)

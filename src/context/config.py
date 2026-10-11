@@ -26,6 +26,7 @@ class RuleSpec:
     layer: str | None = None
     weight_multiplier: float = 1.0
     only_if_lowers: bool = True
+    exclusive_group: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,7 @@ def _rule(raw: dict[str, Any]) -> RuleSpec:
         layer=raw.get("layer"),
         weight_multiplier=float(raw.get("weight_multiplier", 1.0)),
         only_if_lowers=bool(raw.get("only_if_lowers", True)),
+        exclusive_group=raw.get("exclusive_group"),
     )
 
 

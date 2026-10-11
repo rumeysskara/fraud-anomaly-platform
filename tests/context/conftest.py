@@ -22,7 +22,10 @@ def cfg() -> ContextConfig:
 
 @pytest.fixture
 def params() -> ContextParams:
-    return ContextParams(values={"amount_high": 100.0, "dominant_addr2": 87.0}, n_fit=1000)
+    return ContextParams(
+        values={"amount_high": 100.0, "dominant_addr2": 87.0, "trusted_min_history": 20.0},
+        n_fit=1000,
+    )
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 budget,score,alarms,alarms_ent_txn_count_ge_20,alarms_first_seen,alarms_guard_active,left_alarm_set
 0.01,before,100,41,5,11,0
-0.01,after,100,15,6,10,42
+0.01,after,100,11,24,7,84
 0.05,before,500,208,36,34,0
-0.05,after,500,49,122,16,267
+0.05,after,500,128,151,20,253

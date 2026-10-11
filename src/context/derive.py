@@ -28,6 +28,8 @@ FEATURE_COLUMNS = [
 RAW_COLUMNS = ["TransactionAmt", "ProductCD", "addr2"]
 DERIVED_COLUMNS = [
     "abs_amt_zscore_ent",
+    "known_device",
+    "known_email",
     "known_device_or_email",
     "ent_daily_avg",
     "burst_ratio_24h",
@@ -61,8 +63,9 @@ def add_derived(
     """Return a copy of df with the derived columns added.
 
     - abs_amt_zscore_ent = |amt_zscore_ent|
-    - known_device_or_email = this device was used by the entity before (device_ent_match >= 1)
-      or this e-mail domain was used by the entity before (email_ent_known == 1); past only
+    - known_device = this device was used by the entity before (device_ent_match >= 1)
+    - known_email = this e-mail domain was used by the entity before (email_ent_known == 1)
+    - known_device_or_email = known_device or known_email (all past only)
     - ent_daily_avg = ent_txn_count / max(ent_age_days, daily_avg_min_days)
     - burst_ratio_24h = ent_cnt_24h / ent_daily_avg (NaN without history)
     - dominant_layer = layer with the largest weighted contribution (Step 5 weights)
@@ -73,6 +76,8 @@ def add_derived(
     out["abs_amt_zscore_ent"] = out["amt_zscore_ent"].astype("float64").abs()
     device_known = out["device_ent_match"].astype("float64") >= 1
     email_known = out[EMAIL_KNOWN].astype("float64") >= 1
+    out["known_device"] = device_known.astype("int8")
+    out["known_email"] = email_known.astype("int8")
     out["known_device_or_email"] = (device_known | email_known).astype("int8")
     age = out["ent_age_days"].astype("float64").clip(lower=min_days)
     daily = count / age

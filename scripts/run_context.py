@@ -25,10 +25,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.context.config import load_context_config  # noqa: E402
+from src.context.derive import add_derived  # noqa: E402
 from src.context.engine import (  # noqa: E402
     ADJUSTED_SCORE,
     APPLIED,
     GUARD_ACTIVE,
+    UNCLIPPED,
     ContextAdjustEngine,
 )
 from src.context.factory import params_directory  # noqa: E402
@@ -36,9 +38,11 @@ from src.context.inputs import RAW_SOURCE_COLUMNS, build_batch_inputs  # noqa: E
 from src.context.params import ContextParams  # noqa: E402
 from src.context.report import (  # noqa: E402
     alarm_composition,
+    condition_coverage,
     rule_coverage,
     run_ablation,
     tie_break_order,
+    ties_at_cut,
 )
 from src.core.config import (  # noqa: E402
     ARTIFACTS_DIR,
@@ -89,7 +93,8 @@ def evaluate_holdout(
         return evaluate(y_hold, score.loc[y_hold.index], budgets)
 
     rows = []
-    for name, col in (("before", "raw_score"), ("after", ADJUSTED_SCORE)):
+    # ranking uses the UNCLIPPED adjusted score; clipping is for output/display only
+    for name, col in (("before", "raw_score"), ("after", UNCLIPPED)):
         m = ev(result[col])
         for b in budgets:
             alarms = math.ceil(b * len(y_hold))
@@ -106,12 +111,19 @@ def evaluate_holdout(
                     "fp_share_of_alarms": fp / alarms,
                     "pr_auc": m["pr_auc"],
                     "roc_auc": m["roc_auc"],
-                    "rows_at_score_1": int((result.loc[holdout, col] >= 1.0).sum()),
+                    "rows_clipped_score_eq_1": int(
+                        (
+                            result.loc[holdout, "raw_score" if name == "before" else ADJUSTED_SCORE]
+                            >= 1.0
+                        ).sum()
+                    ),
+                    "ties_at_cut": ties_at_cut(result.loc[holdout, col], b),
                 }
             )
     impact = pd.DataFrame(rows)
     impact.to_parquet(out / "fp_impact.parquet", index=False)
     impact.to_csv(out / "fp_impact.csv", index=False)
+    comparison_table(impact, out).to_csv(out / "fp_comparison.csv", index=False)
 
     hold_inputs = inputs.loc[holdout]
     raw_hold = result.loc[holdout, "raw_score"]
@@ -120,6 +132,23 @@ def evaluate_holdout(
     pd.DataFrame([{"n": len(y_hold), "positives": int(y_hold.sum())}]).to_csv(
         out / "holdout_base.csv", index=False
     )
+
+
+def comparison_table(impact: pd.DataFrame, out: Path) -> pd.DataFrame:
+    """Three rows per budget: Step 5 score, initial design (preserved results), revised design."""
+    initial_dir = ROOT / load_yaml("context.yaml")["reporting"]["initial_design_dir"]
+    initial_dir = initial_dir / out.name if out.name == "sample" else initial_dir
+    cols = ["budget", "alarms", "fp", "precision", "recall", "pr_auc"]
+    parts = [impact[impact["score"] == "before"][cols].assign(score="step5 (anomaly_score_norm)")]
+    path = initial_dir / "fp_impact.csv"
+    if path.exists():
+        old = pd.read_csv(path)
+        parts.append(
+            old[old["score"] == "after"][cols].assign(score="initial design (clipped ranking)")
+        )
+    parts.append(impact[impact["score"] == "after"][cols].assign(score="revised design"))
+    table = pd.concat(parts, ignore_index=True)
+    return table.sort_values("budget", kind="stable")[["budget", "score", *cols[1:]]]
 
 
 def main() -> int:
@@ -139,17 +168,17 @@ def main() -> int:
     fit_idx, hold_idx = fit_raw.index, hold_raw.index
     log.info("rows %s (fit %s, holdout %s)", len(feats), len(fit_idx), len(hold_idx))
 
-    params = ContextParams.fit(raw.loc[fit_idx], cfg)
+    meta = joblib.load(ARTIFACTS_DIR / "detectors" / sub / META_FILE)
+    inputs = build_batch_inputs(feats, raw, layers, meta["weights"])
+    del feats
+
+    params = ContextParams.fit(inputs.loc[fit_idx], cfg)
     params_path = params.save(params_directory(cfg, bool(sample_n)))
     log.info("learned params %s -> %s", params.values, params_path)
     step3_addr2 = load_yaml("entity.yaml")["learned"]["dominant_addr2"]
     if params.values.get("dominant_addr2") != step3_addr2:
         log.warning("dominant addr2 differs from Step 3 (%s)", step3_addr2)
-
-    meta = joblib.load(ARTIFACTS_DIR / "detectors" / sub / META_FILE)
     engine = ContextAdjustEngine(cfg, params, meta["weights"], meta["aggregate_normalizer"])
-    inputs = build_batch_inputs(feats, raw, layers, meta["weights"])
-    del feats
 
     check = engine.normalized_aggregate(inputs, engine.weights)
     diff = float(abs(check - scores[NORM_COL].loc[inputs.index].to_numpy()).max())
@@ -166,11 +195,16 @@ def main() -> int:
 
     parts = {"fit": fit_idx, "holdout": hold_idx}
     rule_coverage(result, cfg, parts).to_csv(out / "rule_coverage.csv", index=False)
+    derived = add_derived(inputs, engine.weights, cfg.derived)
+    c4 = condition_coverage(derived, "C4", cfg, params, parts)
+    c4.to_csv(out / "c4_coverage.csv", index=False)
+    log.info("C4 coverage\n%s", c4.to_string(index=False))
+    del derived
     budgets = load_settings()["evaluation"]["alarm_budgets"]
     long_history = int(load_yaml("context.yaml")["reporting"]["long_history_min"])
     comp = alarm_composition(
         result.loc[hold_idx, "raw_score"],
-        result.loc[hold_idx, ADJUSTED_SCORE],
+        result.loc[hold_idx, UNCLIPPED],
         inputs.loc[hold_idx],
         result.loc[hold_idx, GUARD_ACTIVE],
         budgets,
@@ -178,10 +212,10 @@ def main() -> int:
         result.loc[hold_idx, RAW_COL],
     )
     comp.to_csv(out / "alarm_composition.csv", index=False)
-    cols = ["raw_score", ADJUSTED_SCORE, "adjustment_total", "adjustment_unbounded"]
+    cols = ["raw_score", ADJUSTED_SCORE, UNCLIPPED, "adjustment_total", "adjustment_unbounded"]
     result.loc[hold_idx, cols].describe().T.to_csv(out / "score_summary.csv")
-    example = result.loc[hold_idx].sort_values(ADJUSTED_SCORE, ascending=False).head(5)
-    example[["raw_score", ADJUSTED_SCORE, "adjustment_total", APPLIED]].to_json(
+    example = result.loc[hold_idx].sort_values(UNCLIPPED, ascending=False).head(5)
+    example[["raw_score", ADJUSTED_SCORE, UNCLIPPED, "adjustment_total", APPLIED]].to_json(
         out / "examples.json", orient="index", indent=2
     )
 

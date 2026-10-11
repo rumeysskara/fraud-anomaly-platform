@@ -13,14 +13,16 @@
 # {param: name} refers to a value learned on the FIT set (see `learned_params`), saved by
 # scripts/run_context.py to <params_dir>/context_params.json. A NaN feature never satisfies a
 # comparison (only `isna`). Derived columns (src/context/derive.py):
-#   abs_amt_zscore_ent, known_device_or_email, ent_daily_avg, burst_ratio_24h, dominant_layer.
+#   abs_amt_zscore_ent, known_device, known_email, known_device_or_email, ent_daily_avg,
+#   burst_ratio_24h, dominant_layer.
+#
+# exclusive_group: when several rules of the same exclusive group fire on one row, only the one
+# with the LARGEST factor is applied (first in config order on ties).
 # The label (isFraud) is never read for any value in this file.
 
 paths:
   # Learned params are written here (full data); SAMPLE_N runs use <params_dir>/sample.
-  # NOTE: CLAUDE.md puts fitted objects under artifacts/; this step's write scope did not include
-  # artifacts/, so the file lives in reports/context/ for now (change this single value to move it).
-  params_dir: reports/context
+  params_dir: artifacts/context
 
 learned_params:
   # Learned on the fit set (first 80% by TransactionDT) only.
@@ -29,6 +31,9 @@ learned_params:
     quantile: 0.90
   dominant_addr2:
     column: addr2          # most frequent non-null fit value
+  trusted_min_history:     # C4: "long history" = top 10% of fit rows by previous-transaction count
+    column: ent_txn_count
+    quantile: 0.90
 
 bounds:
   min_total: 0.5
@@ -38,8 +43,10 @@ score_clip: {min: 0.0, max: 1.0}
 
 reporting:
   # Label-free alarm profile: alarms on entities with at least this many previous transactions
-  # (same threshold as C4 "trusted"). Alarm budgets come from configs/settings.yaml.
+  # (the initial C4 threshold, kept for comparability). Alarm budgets come from configs/settings.yaml.
   long_history_min: 20
+  # Results of the initial design (before the Step 6 fix), preserved for the comparison table.
+  initial_design_dir: reports/context/initial_design
 
 guard:
   id: G1
@@ -111,20 +118,25 @@ rules:
     group: C4
     name: trusted_entity
     description: >-
-      >= 20 previous transactions, |amt_zscore_ent| <= 2 and the device or e-mail domain was
-      already used by this entity before.
+      Revised (Step 6 fix): previous transactions >= fit q90 of ent_txn_count, entity age >= 30
+      days, |amt_zscore_ent| <= 2, and BOTH the device and the e-mail domain were already used by
+      this entity before.
     type: multiplicative
     factor: 0.75
     condition:
       all:
-        - {feature: ent_txn_count, op: ">=", value: 20}
+        - {feature: ent_txn_count, op: ">=", value: {param: trusted_min_history}}
+        - {feature: ent_age_days, op: ">=", value: 30}
         - {feature: abs_amt_zscore_ent, op: "<=", value: 2.0}
-        - {feature: known_device_or_email, op: "==", value: 1}
+        - {feature: known_device, op: "==", value: 1}
+        - {feature: known_email, op: "==", value: 1}
     rationale: >-
-      A long history, an amount inside the entity's own normal range and a familiar device/e-mail
-      together describe a returning customer behaving as usual; this is the main false-positive
-      source of anomaly models (rare-but-normal customers). Strongest discount, still bounded and
-      overridden by the card-testing guard.
+      A long history, an amount inside the entity's own normal range and a familiar device AND
+      e-mail together describe a returning customer behaving as usual; this is the main
+      false-positive source of anomaly models (rare-but-normal customers). Definition principle
+      (label-free): "trusted" must be a small minority, so the history threshold is a high fit
+      quantile, not a fixed count (with entity = card group a fixed 20 covered ~61% of holdout).
+      Strongest discount, still bounded and overridden by the card-testing guard.
 
   - id: C5
     group: C5
@@ -149,6 +161,7 @@ rules:
 
   - id: C6a
     group: C6
+    exclusive_group: geo_product
     name: foreign_country
     description: addr2 present and different from the dominant fit addr2 (87, assumed US).
     type: multiplicative
@@ -163,6 +176,7 @@ rules:
 
   - id: C6b
     group: C6
+    exclusive_group: geo_product
     name: missing_country_converted_amount
     description: addr2 missing and the amount has 3 decimals (possible currency conversion).
     type: multiplicative
@@ -208,6 +222,7 @@ rules:
 
   - id: C9a
     group: C9
+    exclusive_group: geo_product
     name: product_c
     description: ProductCD = C.
     type: multiplicative
@@ -220,10 +235,11 @@ rules:
       identity/device data and mostly (95%) without a billing country, i.e. a card-not-present,
       likely cross-border digital channel where goods are delivered instantly and resale is easy.
       Small base factor. The EDA fit table (docs/eda.md) was used only as a plausibility check,
-      not to choose the value.
+      not to choose the value. Note: yön fit EDA etiket tablosuyla uyumlu (holdout değil).
 
   - id: C9b
     group: C9
+    exclusive_group: geo_product
     name: product_w
     description: ProductCD = W.
     type: multiplicative
@@ -234,3 +250,4 @@ rules:
     rationale: >-
       Business logic: W is the mainstream product (74.5% of rows); the anomaly layers' notion of
       normal is calibrated mostly on it, so small tolerance. EDA used only as a plausibility check.
+      Note: yön fit EDA etiket tablosuyla uyumlu (holdout değil).

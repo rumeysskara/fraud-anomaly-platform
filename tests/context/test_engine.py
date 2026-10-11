@@ -10,7 +10,13 @@ import pytest
 
 from src.context.conditions import eval_condition
 from src.context.config import parse_context_config
-from src.context.engine import ADJUSTED_SCORE, APPLIED, ContextAdjustEngine
+from src.context.engine import (
+    ADJUSTED_SCORE,
+    APPLIED,
+    UNCLIPPED,
+    ContextAdjustEngine,
+    apply_exclusive_groups,
+)
 from src.context.inputs import email_known_batch
 from src.context.params import ContextParams
 from src.context.report import ablation_variants, alarm_mask, run_ablation
@@ -28,7 +34,7 @@ def _random_frame(neutral: dict, n: int = 300) -> pd.DataFrame:
             is_weekend=int(rng.integers(0, 2)),
             is_low_volume_window=int(rng.integers(0, 2)),
             ent_txn_count=int(rng.integers(0, 40)),
-            ent_age_days=float(rng.uniform(0, 30)),
+            ent_age_days=float(rng.uniform(0, 60)),
             ent_cnt_24h=int(rng.integers(0, 20)),
             amt_zscore_ent=float(rng.normal(0, 2)),
             device_ent_match=int(rng.integers(0, 3)),
@@ -56,6 +62,8 @@ def test_batch_equals_one(engine, neutral):
     for tid, row in df.iterrows():
         one = engine.adjust_one(row.to_dict(), float(raw[tid]))
         assert one.adjusted_score == pytest.approx(batch.at[tid, ADJUSTED_SCORE])
+        total = next(e for e in one.explanations if "total" in e.details)
+        assert total.details[UNCLIPPED] == pytest.approx(batch.at[tid, UNCLIPPED])
         assert one.applied_rules == [e["id"] for e in batch.at[tid, APPLIED]]
     # every rule fires somewhere in the random frame
     fired = {e["id"] for lst in batch[APPLIED] for e in lst}
@@ -65,7 +73,14 @@ def test_batch_equals_one(engine, neutral):
 def test_batch_output_schema(engine, neutral):
     df = _random_frame(neutral, 20)
     out = engine.adjust_batch(df, pd.Series(0.5, index=df.index))
-    for col in ("raw_score", ADJUSTED_SCORE, "adjustment_total", "guard_active", APPLIED):
+    for col in (
+        "raw_score",
+        ADJUSTED_SCORE,
+        UNCLIPPED,
+        "adjustment_total",
+        "guard_active",
+        APPLIED,
+    ):
         assert col in out.columns
     assert out[ADJUSTED_SCORE].between(0, 1).all()
     assert out["adjustment_total"].between(engine.cfg.min_total, engine.cfg.max_total).all()
@@ -106,11 +121,16 @@ def test_nan_never_satisfies_comparison(params):
 
 def test_params_fit_and_roundtrip(cfg, tmp_path):
     fit = pd.DataFrame(
-        {"TransactionAmt": np.arange(1, 101, dtype=float), "addr2": [87.0] * 60 + [60.0] * 40}
+        {
+            "TransactionAmt": np.arange(1, 101, dtype=float),
+            "addr2": [87.0] * 60 + [60.0] * 40,
+            "ent_txn_count": np.arange(100),
+        }
     )
     p = ContextParams.fit(fit, cfg)
     assert p.get("amount_high") == pytest.approx(np.quantile(np.arange(1, 101), 0.9))
     assert p.get("dominant_addr2") == 87.0
+    assert p.get("trusted_min_history") == pytest.approx(np.quantile(np.arange(100), 0.9))
     p.save(tmp_path)
     assert ContextParams.load(tmp_path).values == p.values
     with pytest.raises(KeyError):
@@ -160,3 +180,22 @@ def test_container_has_context_provider():
     from src.container import Container
 
     assert hasattr(Container, "context_adjuster")
+
+
+def test_unclipped_score_keeps_order_above_one(engine, neutral):
+    df = _random_frame(neutral, 200)
+    out = engine.adjust_batch(df, pd.Series(0.95, index=df.index))
+    assert out[ADJUSTED_SCORE].max() <= 1.0
+    assert out[UNCLIPPED].max() > 1.0
+    assert (out[UNCLIPPED] == out["raw_score"] * out["adjustment_total"]).all()
+
+
+def test_apply_exclusive_groups_unit(cfg):
+    rules = [r for r in cfg.rules if r.exclusive_group]
+    ids = [r.id for r in rules]  # C6a, C6b, C9a, C9b
+    f = np.ones((2, len(rules)))
+    f[0, ids.index("C6b")], f[0, ids.index("C9a")] = 1.1, 1.1
+    f[1, ids.index("C9b")] = 0.95
+    out = apply_exclusive_groups(f, rules)
+    assert out[0].tolist().count(1.1) == 1 and out[0, ids.index("C6b")] == 1.1
+    assert out[1, ids.index("C9b")] == 0.95  # alone in the group: kept

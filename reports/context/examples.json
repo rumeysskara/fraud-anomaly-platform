@@ -1,114 +1,101 @@
 {
-  "3505443":{
-    "raw_score":0.9968065113,
+  "3569810":{
+    "raw_score":0.9984102408,
     "adjusted_score":1.0,
-    "adjustment_total":1.21,
+    "adjusted_score_unclipped":1.3778061323,
+    "adjustment_total":1.38,
     "applied_adjustments":[
       {
-        "id":"C6b",
-        "name":"missing_country_converted_amount",
-        "factor":1.1,
-        "reason":"No billing country plus a converted amount suggests a foreign transaction whose origin we cannot verify; smaller boost than C6a because both signals are interpretations (assumption 7)."
-      },
-      {
-        "id":"C9a",
-        "name":"product_c",
-        "factor":1.1,
-        "reason":"Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online identity\/device data and mostly (95%) without a billing country, i.e. a card-not-present, likely cross-border digital channel where goods are delivered instantly and resale is easy. Small base factor. The EDA fit table (docs\/eda.md) was used only as a plausibility check, not to choose the value."
-      }
-    ]
-  },
-  "3495275":{
-    "raw_score":0.8590398164,
-    "adjusted_score":1.0,
-    "adjustment_total":1.21,
-    "applied_adjustments":[
-      {
-        "id":"C6b",
-        "name":"missing_country_converted_amount",
-        "factor":1.1,
-        "reason":"No billing country plus a converted amount suggests a foreign transaction whose origin we cannot verify; smaller boost than C6a because both signals are interpretations (assumption 7)."
-      },
-      {
-        "id":"C9a",
-        "name":"product_c",
-        "factor":1.1,
-        "reason":"Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online identity\/device data and mostly (95%) without a billing country, i.e. a card-not-present, likely cross-border digital channel where goods are delivered instantly and resale is easy. Small base factor. The EDA fit table (docs\/eda.md) was used only as a plausibility check, not to choose the value."
-      }
-    ]
-  },
-  "3541942":{
-    "raw_score":0.9658256186,
-    "adjusted_score":1.0,
-    "adjustment_total":1.037875,
-    "applied_adjustments":[
-      {
-        "id":"C3",
-        "name":"weekend_established_entity",
-        "factor":0.95,
-        "reason":"Weekend shopping is normal consumer behaviour; for a card group with an established history a weekend transaction is not by itself suspicious. Small discount only. Weekend depends on the reference-date assumption (2017-12-01)."
+        "id":"C6a",
+        "name":"foreign_country",
+        "factor":1.2,
+        "reason":"Cross-border transactions are a classic risk factor (card used outside its home market). addr2 = 87 = US is a community interpretation (assumption 3)."
       },
       {
         "id":"C8",
         "name":"new_card_high_amount",
         "factor":1.15,
         "reason":"A large purchase on the first day of a card is a known bust-out \/ stolen-card pattern; a genuine new customer usually starts small. D1 = card age is a data-supported assumption (5)."
-      },
-      {
-        "id":"C9b",
-        "name":"product_w",
-        "factor":0.95,
-        "reason":"Business logic: W is the mainstream product (74.5% of rows); the anomaly layers' notion of normal is calibrated mostly on it, so small tolerance. EDA used only as a plausibility check."
       }
     ]
   },
-  "3523909":{
-    "raw_score":0.8970628225,
+  "3516595":{
+    "raw_score":0.9762926935,
     "adjusted_score":1.0,
-    "adjustment_total":1.1495,
+    "adjusted_score_unclipped":1.347283917,
+    "adjustment_total":1.38,
     "applied_adjustments":[
       {
-        "id":"C3",
-        "name":"weekend_established_entity",
-        "factor":0.95,
-        "reason":"Weekend shopping is normal consumer behaviour; for a card group with an established history a weekend transaction is not by itself suspicious. Small discount only. Weekend depends on the reference-date assumption (2017-12-01)."
+        "id":"C2",
+        "name":"low_volume_high_amount",
+        "factor":1.15,
+        "reason":"Large purchases in the hours when few customers are active are a common account-takeover pattern (fraudster acts while the owner sleeps). Only high amounts are boosted so that ordinary night activity is not penalized."
       },
       {
-        "id":"C6b",
-        "name":"missing_country_converted_amount",
-        "factor":1.1,
-        "reason":"No billing country plus a converted amount suggests a foreign transaction whose origin we cannot verify; smaller boost than C6a because both signals are interpretations (assumption 7)."
-      },
-      {
-        "id":"C9a",
-        "name":"product_c",
-        "factor":1.1,
-        "reason":"Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online identity\/device data and mostly (95%) without a billing country, i.e. a card-not-present, likely cross-border digital channel where goods are delivered instantly and resale is easy. Small base factor. The EDA fit table (docs\/eda.md) was used only as a plausibility check, not to choose the value."
+        "id":"C6a",
+        "name":"foreign_country",
+        "factor":1.2,
+        "reason":"Cross-border transactions are a classic risk factor (card used outside its home market). addr2 = 87 = US is a community interpretation (assumption 3)."
       }
     ]
   },
-  "3521091":{
-    "raw_score":0.9953125801,
+  "3554648":{
+    "raw_score":0.9675947678,
     "adjusted_score":1.0,
-    "adjustment_total":1.1495,
+    "adjusted_score_unclipped":1.3352807796,
+    "adjustment_total":1.38,
     "applied_adjustments":[
       {
-        "id":"C3",
-        "name":"weekend_established_entity",
-        "factor":0.95,
-        "reason":"Weekend shopping is normal consumer behaviour; for a card group with an established history a weekend transaction is not by itself suspicious. Small discount only. Weekend depends on the reference-date assumption (2017-12-01)."
+        "id":"C6a",
+        "name":"foreign_country",
+        "factor":1.2,
+        "reason":"Cross-border transactions are a classic risk factor (card used outside its home market). addr2 = 87 = US is a community interpretation (assumption 3)."
       },
       {
-        "id":"C6b",
-        "name":"missing_country_converted_amount",
-        "factor":1.1,
-        "reason":"No billing country plus a converted amount suggests a foreign transaction whose origin we cannot verify; smaller boost than C6a because both signals are interpretations (assumption 7)."
+        "id":"C8",
+        "name":"new_card_high_amount",
+        "factor":1.15,
+        "reason":"A large purchase on the first day of a card is a known bust-out \/ stolen-card pattern; a genuine new customer usually starts small. D1 = card age is a data-supported assumption (5)."
+      }
+    ]
+  },
+  "3485841":{
+    "raw_score":0.9975915576,
+    "adjusted_score":1.0,
+    "adjusted_score_unclipped":1.3193148349,
+    "adjustment_total":1.3225,
+    "applied_adjustments":[
+      {
+        "id":"C2",
+        "name":"low_volume_high_amount",
+        "factor":1.15,
+        "reason":"Large purchases in the hours when few customers are active are a common account-takeover pattern (fraudster acts while the owner sleeps). Only high amounts are boosted so that ordinary night activity is not penalized."
       },
       {
-        "id":"C9a",
-        "name":"product_c",
-        "factor":1.1,
-        "reason":"Business logic: C is a minority product (11.6% of rows) that mostly (91%) comes with online identity\/device data and mostly (95%) without a billing country, i.e. a card-not-present, likely cross-border digital channel where goods are delivered instantly and resale is easy. Small base factor. The EDA fit table (docs\/eda.md) was used only as a plausibility check, not to choose the value."
+        "id":"C8",
+        "name":"new_card_high_amount",
+        "factor":1.15,
+        "reason":"A large purchase on the first day of a card is a known bust-out \/ stolen-card pattern; a genuine new customer usually starts small. D1 = card age is a data-supported assumption (5)."
+      }
+    ]
+  },
+  "3485851":{
+    "raw_score":0.9963066594,
+    "adjusted_score":1.0,
+    "adjusted_score_unclipped":1.3176155571,
+    "adjustment_total":1.3225,
+    "applied_adjustments":[
+      {
+        "id":"C2",
+        "name":"low_volume_high_amount",
+        "factor":1.15,
+        "reason":"Large purchases in the hours when few customers are active are a common account-takeover pattern (fraudster acts while the owner sleeps). Only high amounts are boosted so that ordinary night activity is not penalized."
+      },
+      {
+        "id":"C8",
+        "name":"new_card_high_amount",
+        "factor":1.15,
+        "reason":"A large purchase on the first day of a card is a known bust-out \/ stolen-card pattern; a genuine new customer usually starts small. D1 = card age is a data-supported assumption (5)."
       }
     ]
   }

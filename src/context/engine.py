@@ -23,7 +23,8 @@ from src.core.types import AdjustedResult, Explanation
 from src.scoring.aggregation import WeightedAverage
 
 RAW_SCORE = "raw_score"
-ADJUSTED_SCORE = "adjusted_score"
+ADJUSTED_SCORE = "adjusted_score"  # clipped to [0, 1]: output / display
+UNCLIPPED = "adjusted_score_unclipped"  # raw_score x total: used for ranking (alarm budgets)
 TOTAL = "adjustment_total"
 UNBOUNDED = "adjustment_unbounded"
 GUARD_ACTIVE = "guard_active"
@@ -41,7 +42,32 @@ class CoreResult:
     unbounded: np.ndarray  # product of all factors
     total: np.ndarray  # after bounds and guard
     guard: np.ndarray  # card-testing guard condition
-    adjusted: np.ndarray
+    unclipped: np.ndarray  # raw x total (ranking)
+    adjusted: np.ndarray  # unclipped clipped to [clip_min, clip_max] (output)
+
+
+def apply_exclusive_groups(factors: np.ndarray, rules: list[RuleSpec]) -> np.ndarray:
+    """Within each exclusive group keep only the largest applied factor per row.
+
+    Rules that did not fire have factor 1.0 and do not compete; ties keep the first rule in
+    config order. Returns a new array.
+    """
+    out = factors.copy()
+    groups: dict[str, list[int]] = {}
+    for j, rule in enumerate(rules):
+        if rule.exclusive_group:
+            groups.setdefault(rule.exclusive_group, []).append(j)
+    for cols in groups.values():
+        if len(cols) < 2:
+            continue
+        sub = out[:, cols]
+        fired = np.abs(sub - 1.0) > FACTOR_EPS
+        ranked = np.where(fired, sub, -np.inf)
+        keep = ranked.argmax(axis=1)
+        drop = fired & (np.arange(len(cols))[None, :] != keep[:, None])
+        sub[drop] = 1.0
+        out[:, cols] = sub
+    return out
 
 
 class ContextAdjustEngine(ContextAdjuster):
@@ -122,6 +148,7 @@ class ContextAdjustEngine(ContextAdjuster):
                 factors[:, j] = np.where(mask, self._layer_weight_factor(data, rule), 1.0)
             else:
                 factors[:, j] = np.where(mask, rule.factor, 1.0)
+        factors = apply_exclusive_groups(factors, rules)
         unbounded = factors.prod(axis=1)
         total = unbounded.copy()
         if self.cfg.use_bounds:
@@ -130,8 +157,9 @@ class ContextAdjustEngine(ContextAdjuster):
         if self.cfg.use_guard:
             total = np.where(guard, np.maximum(total, self.cfg.guard.min_total), total)
         raw = np.asarray(raw, dtype="float64")
-        adjusted = np.clip(raw * total, self.cfg.clip_min, self.cfg.clip_max)
-        return CoreResult(rules, factors, unbounded, total, guard, adjusted)
+        unclipped = raw * total
+        adjusted = np.clip(unclipped, self.cfg.clip_min, self.cfg.clip_max)
+        return CoreResult(rules, factors, unbounded, total, guard, unclipped, adjusted)
 
     def _entries(self, res: CoreResult, i: int) -> list[dict[str, Any]]:
         """Applied adjustments of row i: rules, then bounds/guard corrections if they changed it."""
@@ -170,14 +198,18 @@ class ContextAdjustEngine(ContextAdjuster):
     def adjust_batch(
         self, df: pd.DataFrame, raw_score: pd.Series, explain: bool = True
     ) -> pd.DataFrame:
-        """Adjust many rows. Columns: raw_score, adjusted_score, adjustment_total,
-        adjustment_unbounded, guard_active, factor_<rule id> and (explain=True) applied_adjustments.
+        """Adjust many rows.
+
+        Columns: raw_score, adjusted_score ([0,1], output), adjusted_score_unclipped (ranking),
+        adjustment_total, adjustment_unbounded, guard_active, factor_<rule id> and
+        (explain=True) applied_adjustments.
         """
         raw = raw_score.loc[df.index].to_numpy("float64")
         res = self._core(df, raw)
         out = pd.DataFrame(index=df.index)
         out[RAW_SCORE] = raw
         out[ADJUSTED_SCORE] = res.adjusted
+        out[UNCLIPPED] = res.unclipped
         out[TOTAL] = res.total
         out[UNBOUNDED] = res.unbounded
         out[GUARD_ACTIVE] = res.guard.astype("int8")
@@ -206,6 +238,7 @@ class ContextAdjustEngine(ContextAdjuster):
                 message=f"total factor x{res.total[0]:.3f}",
                 details={
                     "total": float(res.total[0]),
+                    UNCLIPPED: float(res.unclipped[0]),
                     "unbounded": float(res.unbounded[0]),
                     "guard_active": bool(res.guard[0]),
                 },
