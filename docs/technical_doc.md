@@ -243,6 +243,13 @@ dosyasındadır; kod içinde eşik yazılmaz.
 
 ## 4. Veri ve varsayımlar
 
+Resmi ve tekrar üretilebilir analiz `scripts/run_profiling.py` (`reports/profile/`) ve
+`scripts/eda_report.py` (`docs/eda.md`) çıktılarıdır. Ayrıca keşifsel bir notebook vardır:
+`notebooks/EDA.ipynb` (Kaggle'da çalıştırıldı, plotly grafikleri; pipeline'ın parçası değildir).
+İlgili bölümleri: birleştirme 3, kolon tipi 4, veri kalitesi 5, eksik veri 6, dağılımlar 9,
+**outlier 10**, kardinalite 11, **nadir kategorik kombinasyonlar 12**, kolon ilişkileri 13,
+zaman desenleri 14, **entity davranışı 15**.
+
 ### 4.1 Birleştirme ve şekil
 - `train_transaction.csv` (590.540 satır) ana tablo; `train_identity.csv` (144.233 satır)
   `TransactionID` ile **LEFT JOIN**. Eşleşen satır 144.233 (%24,4); identity kaydı olmayan satırlar
@@ -318,6 +325,9 @@ görülmüş, D1 karıştırılınca %33,0 (`reports/profile/d1_semantics.csv`).
 Bilinen sonuç: H bir kişi değil, yaklaşık bir **kart grubudur**. Holdout'ta temporal skorun en yüksek
 %1'inin %96,4'ü tek bir entity'ye (card1 15775, addr1 330) aittir; addr1 boş satırlar da tek bir
 seviyede toplanır (card1 15885). Bu sınır Adım 5-7 sonuçlarını etkiler (`docs/assumptions.md` varsayım 6).
+EDA notebook'unun entity bölümünde (`notebooks/EDA.ipynb` bölüm 15) görülen adressiz entity torbası
+bulgusu (ör. card1 15885 + addr1 boş: 9.928 işlem, 609 cihaz, 21 e-posta alanı) K-55'e yol açtı: C4 ve R10
+artık addr1 boş kart gruplarını güvenilir saymaz.
 
 ### 4.6 Varsayımlar tablosu (özet)
 Tam tablo: `docs/assumptions.md`.

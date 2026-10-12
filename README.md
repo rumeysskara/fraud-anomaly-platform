@@ -200,6 +200,9 @@ artifacts/          fit edilmiş modeller, FAISS indeksi; repoda yok
 - Case gereksinimleri kapsama tablosu: [docs/requirements_coverage.md](docs/requirements_coverage.md)
 - Varsayımlar: [docs/assumptions.md](docs/assumptions.md), EDA: [docs/eda.md](docs/eda.md),
   veri sözlüğü: [docs/data_dictionary.md](docs/data_dictionary.md)
+- Keşifsel veri analizi: [notebooks/EDA.ipynb](notebooks/EDA.ipynb) (Kaggle'da çalıştırıldı). Grafikler GitHub'da
+  resim olarak görünür; Jupyter veya VS Code'da açıldığında etkileşimlidir. Resmi ve tekrar üretilebilir
+  EDA raporu `scripts/eda_report.py` ile üretilen [docs/eda.md](docs/eda.md)'dir.
 - Adım sonu denetim raporları: [reports/reviews/](reports/reviews/)
 
 ## Geliştirme süreci
