@@ -166,7 +166,7 @@ class System:
         self.bus = MessageBus(settings.bus.max_depth)
         self.planner = Planner(llm, settings)
         factory = AgentFactory(
-            self.bus, settings, scoring, adjuster, engine, rag, self.planner  # type: ignore[arg-type]
+            self.bus, settings, scoring, adjuster, engine, lambda: rag, self.planner  # type: ignore
         )
         self.coordinator: CoordinatorAgent = factory.create_system()
 

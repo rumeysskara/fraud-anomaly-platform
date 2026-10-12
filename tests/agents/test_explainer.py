@@ -6,6 +6,7 @@ import pytest
 
 from src.agents.explainer_agent import is_empty_answer, strip_task_sentences
 from src.agents.messages import AnalystRequest
+from src.rag.errors import EmbeddingUnavailableError, IndexNotBuiltError
 from tests.agents.conftest import RECORD, FakeEngine, FakeRAG
 
 TASK = "TransactionID 3519086 işlemini incele ve bir inceleme notu yaz."
@@ -76,3 +77,21 @@ def test_is_empty_answer_helper(settings) -> None:
     pattern = settings.explainer.empty_sources_pattern
     assert is_empty_answer("Kaynaklar: [x#y]", pattern)
     assert not is_empty_answer("Kural tetiklendi. Kaynaklar: [x#y]", pattern)
+
+
+@pytest.mark.parametrize(
+    "error", [IndexNotBuiltError("run make rag-index"), EmbeddingUnavailableError("ollama down")]
+)
+def test_missing_index_or_embedding_falls_back_to_template(make_system, error: Exception) -> None:
+    class NoRetrieval(FakeRAG):
+        def answer(self, question, explanation=None, rule_ids=None):  # type: ignore[override]
+            raise error
+
+    response = make_system(rag=NoRetrieval()).coordinator.analyze(
+        AnalystRequest(record=dict(RECORD))
+    )
+    exp = response.explanation
+    assert exp is not None and exp.origin == "template" and exp.grounded is False
+    assert exp.flags == ["rag_unavailable", "explanation_fallback"]
+    assert "Karar:" in (exp.text or "") and response.decision is not None
+    assert any(t.intent == "explanation_fallback" for t in response.trace)

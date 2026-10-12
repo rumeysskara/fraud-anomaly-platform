@@ -20,7 +20,7 @@
 | Sezon penceresi | geçti | veriden öğrenildi (29 günlük taban): 2017-12-19..26; 1,83x. 7 günlük taban yerine 29 günlük taban gerekçesi `docs/step3.md` ve K-10'da yazılı |
 | `docs/step3.md` | geçti | ne/neden, şema, sonraki adım, sınırlar, "isFraud kullanıldı mı: hayır", varsayımlar, H = yaklaşık kart grubu |
 | `docs/decisions.md` K-06..K-10 | geçti | Karar / Alternatifler / Neden biçiminde |
-| `notes/step3_interview.md` | geçti | `.gitignore:16` ile repo dışı |
+| Kişisel çalışma notları | geçti | kişisel çalışma notları .gitignore'da (repo dışı) |
 | README notu | geçti | `README.md:6` |
 | Type hint / docstring | geçti | public fonksiyonlarda var; dosyalar 400 satırın altında |
 

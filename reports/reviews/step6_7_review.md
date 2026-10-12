@@ -146,12 +146,10 @@ Sonuç: dört dosyadaki geçişlerin hiçbiri ihlal değil. Skill'in "başka yer
 - Boost etkisi: 5.644 satır, ort. 0,1926, tavana takılan 0 (fit 6) = `score_effect.csv`
 - Adım 6: C4 kapsaması %2,05 / %3,98 = `c4_coverage.csv`; üç satırlı tablo = `fp_comparison.csv`
 
-## 8. notes/
+## 8. Kişisel çalışma notları
 | Kontrol | Durum | Kanıt |
 |---|---|---|
-| `notes/step7_interview.md` var | ✅ | dosya mevcut |
-| gitignore'da | ✅ | `git check-ignore -v` -> `.gitignore:16:notes/`; `git ls-files notes` -> 0; `git log --all -- notes` boş |
-| step6/7.md'ye sızma | ✅ | `grep -i "görüşme\|interview\|soru-cevap\|nasıl anlatırım" docs/step6.md docs/step7.md` boş |
+| gitignore'da | ✅ | kişisel çalışma notları .gitignore'da (repo dışı); takipte değil, geçmişte commit'lenmemiş |
 
 ## 9. Kod sadeliği ve standartlar
 - Type hint: AST taraması (src/rules, src/context, src/evaluation/rule_metrics.py): public fonksiyonların hepsinde dönüş tipi var. ✅
@@ -189,7 +187,7 @@ Karar doğru (review), ama: (i) V5 kazanmış sayılması gereken allow'a yenild
 *Öneri:* (a) istek anında verilen kural setlerinde durumu her zaman salt okunur kullanmak (`rules is not None` ise `update_state=False`); (b) aynı TransactionID ikinci kez gelirse durumu güncellememek (idempotency anahtarı); (c) bu davranışı step7.md "Bilinen sınırlar" bölümüne ve API girdisine not olarak eklemek. Adım 10'dan önce karar verilmeli.
 
 **K7-4. decisions.md K-22, K-25 ile çelişiyor ve "değişti" olarak işaretlenmemiş.**
-`docs/decisions.md:138-141`: "Allow kuralı skor tabanlı incelemeye üstün gelir" ve "allow yalnızca eşit veya daha yüksek öncelikli bir block/review yoksa geçerli". K-25(1) bunların ikisini de değiştirdi. K-18'deki "(DÜZELTİLDİ)" yöntemiyle K-22 başlığına "(K-25 ile değişti)" eklenmeli ve eski cümlelere işaret konmalı. Aynı eski tanım `configs/rules.yaml:25-26`'daki yorumda da duruyor (block'un öncelikten bağımsız kazandığı yazmıyor). `configs/rules.yaml:42` "review if final_score_unclipped >=" diyor; kod ise boost öncesi `adjusted_score_unclipped` ile karşılaştırıyor (engine.py:183, step7.md:164 doğru). Kullanıcı görüşmede K-22'yi okursa yanlış kuralı anlatır.
+`docs/decisions.md:138-141`: "Allow kuralı skor tabanlı incelemeye üstün gelir" ve "allow yalnızca eşit veya daha yüksek öncelikli bir block/review yoksa geçerli". K-25(1) bunların ikisini de değiştirdi. K-18'deki "(DÜZELTİLDİ)" yöntemiyle K-22 başlığına "(K-25 ile değişti)" eklenmeli ve eski cümlelere işaret konmalı. Aynı eski tanım `configs/rules.yaml:25-26`'daki yorumda da duruyor (block'un öncelikten bağımsız kazandığı yazmıyor). `configs/rules.yaml:42` "review if final_score_unclipped >=" diyor; kod ise boost öncesi `adjusted_score_unclipped` ile karşılaştırıyor (engine.py:183, step7.md:164 doğru). K-22'yi okuyan biri yanlış kuralı öğrenir.
 
 ### Küçük
 

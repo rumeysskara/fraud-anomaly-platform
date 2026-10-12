@@ -1,13 +1,14 @@
 """Step 9 demo: run three holdout transactions (block / review / allow) through the agents.
 
-Usage: python scripts/run_agents_demo.py [--no-llm]
+Usage: python scripts/run_agents_demo.py
 The three transactions are picked from the HOLDOUT by the rule engine's batch decision only
 (reports/rules/rule_hits.parquet); no label is read. The middle row (by TransactionID) of each
 decision group is used, skipping rows a cooldown removed (the online store starts empty, so
 they could not match). Everything else is the real online path: records are assembled from
 data/processed, and the AnomalyAgent, ContextAgent, RuleAgent and ExplainerAgent run through the
-bus with the real Ollama models. If Ollama is down the run still finishes (no plan from the
-LLM, explanation shows the retrieval-only/unavailable state). Traces: reports/agents/.
+bus with the real Ollama models. If Ollama or the RAG index is missing the run still finishes
+(default plan, template explanation flagged rag_unavailable/llm_unavailable). Traces:
+reports/agents/.
 """
 
 from __future__ import annotations

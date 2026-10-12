@@ -16,7 +16,7 @@ knowledge_base/{typologies,feature_dictionary,operations_guide}.md (elle) ─┐
 soru (+ kural motoru explain çıktısı) ─> HybridRetriever ─> PromptBuilder ─> qwen2.5:7b ─> RAGAnswer
 ```
 
-Çalışma zamanında (API, Adım 9) indeks kurulmaz; `Container.rag_service` yalnızca `artifacts/rag/` içindeki hazır indeksi yükler.
+Çalışma zamanında (API, Adım 10) indeks kurulmaz; `Container.rag_service` yalnızca `artifacts/rag/` içindeki hazır indeksi yükler.
 
 ## Modeller ve gerekçe (K-28)
 | Bileşen | Seçim | Gerekçe |
@@ -56,7 +56,7 @@ Neden yapıya duyarlı: kural kartı veya prosedür adımları ortasından kesil
 3. Her sonuç `metadata["retrieval"]` ile "metadata" veya "semantic" işaretlenir. `filters["doc_types"]` tüm sonuçları belge türüyle sınırlar.
 
 ## LLM bağlamı ve çıktı (K-32)
-Prompt şablonu `configs/rag.yaml` içindedir. Sistem talimatı: yalnızca BAĞLAM'dan Türkçe cevap ver; bağlamda yoksa aynen "Bilgi tabanında bu bilgi yok." de; tahmin etme, kural/eşik/sayı uydurma; kaynak chunk id'lerini köşeli parantezle yaz. Sistem mesajı = talimat + numaralı parçalar (`[chunk_id] başlık` + metin). Kullanıcı mesajı = (varsa) kural motoru çıktısının seçili alanları (`final_decision`, `triggered_rules`, `flags`, `reasons`, skorlar) + soru + "Kaynaklar:" hatırlatması. `LLMClient.generate(prompt, context)`: `prompt` kullanıcı, `context` sistem mesajıdır.
+Prompt şablonu `configs/rag.yaml` içindedir. Sistem talimatı: yalnızca BAĞLAM'dan Türkçe cevap ver; bağlamda yoksa aynen "Bilgi tabanında bu konuda bilgi yok" de; tahmin etme, kural/eşik/sayı uydurma; kaynak chunk id'lerini köşeli parantezle yaz. Sistem mesajı = talimat + numaralı parçalar (`[chunk_id] başlık` + metin). Kullanıcı mesajı = (varsa) kural motoru çıktısının seçili alanları (`final_decision`, `triggered_rules`, `flags`, `reasons`, skorlar) + soru + "Kaynaklar:" hatırlatması. `LLMClient.generate(prompt, context)`: `prompt` kullanıcı, `context` sistem mesajıdır.
 
 `RAGService.answer(question, explanation=None, rule_ids=None, k=None) -> RAGAnswer`:
 ```
@@ -66,7 +66,7 @@ cited_ids     : [chunk_id]            # cevap metninde geçen kaynak id'leri
 used_context  : [chunk metni]
 flags         : ["llm_unavailable"]   # LLM yoksa
 ```
-Dayanıklılık: Ollama kapalıysa veya LLM kurulu değilse retrieval sonucu `answer=null` ve `llm_unavailable` ile döner (çökme yok). Embedding modeli yoksa `EmbeddingUnavailableError`, indeks yoksa `IndexNotBuiltError` (mesaj `make rag-index` der). Timeout'lar `configs/rag.yaml` içindedir. Retry yoktur.
+Dayanıklılık: Ollama kapalıysa veya LLM kurulu değilse retrieval sonucu `answer=null` ve `llm_unavailable` ile döner (çökme yok). Embedding modeli yoksa `EmbeddingUnavailableError`, indeks yoksa `IndexNotBuiltError` (mesaj `make rag-index` der); Ollama tamamen kapalıyken retrieval de yapılamaz, yani `RAGService` cevap üretemez. `/rag/query` bu durumda `llm_status="unavailable"` (embedding) veya 503 (indeks yok) döner; ExplainerAgent (Adım 9) ise iki hatada da şablon açıklamaya düşer. Timeout'lar `configs/rag.yaml` içindedir. Retry yoktur.
 
 ## Güvenilirlik katmanları (K-33, ek tur)
 İlk sürümde 7B model bağlam dışı ifade uydurmuş ve KB'de olmayan bir soruya yanlış bir sayı vermişti (aşağıdaki "ilk sürüm" notları). Bunun üzerine kullanıcı kararıyla üç önlem eklendi:

@@ -22,7 +22,7 @@ Denetçi: step-review. Kod değiştirilmedi, commit yapılmadı. Geçici analiz 
 | 12 | docs/step4.md, step5.md | ✅ | Girdi, çıktı + şema, sonraki girdi, sınırlar, "isFraud kullanıldı mı: hayır" notları var; tablo sayıları `holdout_metrics.csv` / `ablation.csv` ile eşleşti |
 | 13 | docs/decisions.md K-11..K-19 | ✅ | Aşağıda 2. bölüm |
 | 14 | README notu | ✅ | README.md:6 "Geliştirmede Claude Code kullanılmıştır..." |
-| 15 | notes/ .gitignore'da | ✅ | `git check-ignore -v notes/step4_5_interview.md` -> `.gitignore:16:notes/`; dosya mevcut |
+| 15 | Kişisel çalışma notları | ✅ | kişisel çalışma notları .gitignore'da (repo dışı) |
 | 16 | Örneklem -> tam veri | ✅/⚠️ | Tam veri çıktıları mevcut (`reports/scores/*`, `artifacts/detectors/*`). Doküman "~90 sn, ~3 GB" diyor: yeniden koşturulmadı (repo çıktılarını ezmemek için), doğrulanmadı |
 | 17 | Batch = online | ⚠️ | Aşağıda önemli bulgu Ö-2 |
 

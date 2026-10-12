@@ -1,6 +1,8 @@
 # API settings (Step 10). Every key is optional; the defaults live in src/api/config.py.
 llm:
-  timeout_seconds: 60        # deadline for /explain and /rag/query; on expiry facts are returned
+  timeout_seconds: 60        # total deadline of /explain and /rag/query; on expiry facts are returned
+  planner_timeout_seconds: 10    # /explain: LLM planner share (only when a question is given)
+  explainer_timeout_seconds: 50  # /explain: RAG explanation share; planner + explainer <= total
 online:
   result_cache_size: 5000    # /score results kept for idempotency (per TransactionID)
   record_cache_size: 256     # full feature records kept so /explain of a scored id matches
@@ -8,4 +10,3 @@ health:
   ollama_timeout_seconds: 2
 rag:
   max_k: 10
-  max_question_chars: 1000

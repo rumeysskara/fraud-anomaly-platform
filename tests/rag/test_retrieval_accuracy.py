@@ -32,7 +32,7 @@ def test_real_retrieval_hit_at_k() -> None:
     except httpx.HTTPError:
         pytest.skip("Ollama is not reachable")
     retriever = HybridRetriever(
-        OllamaEmbedder(settings.embedding),
+        OllamaEmbedder(settings.embedding, httpx.Client(base_url=settings.embedding.host)),
         FaissVectorStore.load(settings.index_dir),
         settings.retrieval,
     )

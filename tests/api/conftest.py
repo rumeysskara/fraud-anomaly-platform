@@ -16,7 +16,7 @@ from src.agents.bus import MessageBus
 from src.agents.config import load_agent_settings
 from src.agents.factory import AgentFactory
 from src.agents.planner import Planner
-from src.api.config import ApiSettings, agent_settings_for_api
+from src.api.config import ApiSettings, LLMSettings, agent_settings_for_api
 from src.api.health import HealthService
 from src.api.main import create_app
 from src.api.online import OnlineScorer
@@ -221,8 +221,14 @@ class World:
     """All fakes of one test in one place."""
 
     def __init__(self, rag: FakeRAG | None = None, llm_timeout: float = 60.0) -> None:
-        self.api_settings = ApiSettings()
-        self.api_settings.llm.timeout_seconds = llm_timeout
+        # Same 1/6 planner, 5/6 explainer split as configs/api.yaml (10 s + 50 s of 60 s).
+        self.api_settings = ApiSettings(
+            llm=LLMSettings(
+                timeout_seconds=llm_timeout,
+                planner_timeout_seconds=llm_timeout / 6,
+                explainer_timeout_seconds=llm_timeout * 5 / 6,
+            )
+        )
         self.pipeline = FakePipeline()
         self.scoring = FakeScoring()
         self.adjuster = FakeAdjuster()
@@ -245,7 +251,7 @@ class World:
             self.scoring,  # type: ignore[arg-type]
             self.adjuster,
             self.engine,
-            self.rag,  # type: ignore[arg-type]
+            lambda: self.rag,  # type: ignore[arg-type,return-value]
             Planner(NoPlanLLM(), agents),
         )
         self.coordinator = factory.create_system()

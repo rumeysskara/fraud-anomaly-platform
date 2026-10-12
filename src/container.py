@@ -9,12 +9,13 @@ from src.agents.bus import MessageBus
 from src.agents.config import load_agent_settings
 from src.agents.factory import AgentFactory, build_planner_llm, create_coordinator
 from src.agents.planner import Planner
+from src.api.artifacts import resolve_artifact_set
 from src.api.config import agent_settings_for_api, load_api_settings
 from src.api.health import HealthService
 from src.api.online import OnlineScorer
 from src.api.services import ExplainService, RagQueryService
 from src.context.factory import load_engine
-from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
+from src.core.config import CONFIG_DIR, get_sample_n
 from src.features.pipeline import FeaturePipeline
 from src.rag.config import load_rag_settings
 from src.rag.embedder import OllamaEmbedder
@@ -34,18 +35,23 @@ class Container(containers.DeclarativeContainer):
 
     config = providers.Configuration()
 
+    # Step 8-10 review (Ö4): full-data or SAMPLE_N artifact paths, from the SAMPLE_N env var.
+    artifact_set = providers.Singleton(resolve_artifact_set, providers.Callable(get_sample_n))
+
     # Step 3: fitted feature pipeline + entity store (loaded lazily; the API never trains).
     feature_pipeline = providers.Singleton(
         FeaturePipeline.load,
-        ARTIFACTS_DIR / "feature_pipeline.joblib",
-        ARTIFACTS_DIR / "entity_profiles.parquet",
+        artifact_set.provided.feature_pipeline,
+        artifact_set.provided.entity_profiles,
     )
 
     # Step 4-5: fitted anomaly layers + weights + normalization tables (loaded, never trained).
-    scoring_service = providers.Singleton(ScoringService.load, ARTIFACTS_DIR / "detectors")
+    scoring_service = providers.Singleton(ScoringService.load, artifact_set.provided.detectors_dir)
 
     # Step 6: context adjuster (configs/context.yaml + fit-learned params + Step 5 weights/table).
-    context_adjuster = providers.Singleton(load_engine, ARTIFACTS_DIR / "detectors")
+    context_adjuster = providers.Singleton(
+        load_engine, artifact_set.provided.detectors_dir, artifact_set.provided.context_params_dir
+    )
 
     # Step 7: rule repository (configs/rules.yaml + rules_extra.json, reload()) and rule engine
     # (thresholds learned on the fit set, stored in rules.yaml `learned:`; never fitted here).
@@ -53,14 +59,26 @@ class Container(containers.DeclarativeContainer):
     # Step 7 review (K7-2): online cooldown state, injected into the engine (override in tests).
     cooldown_store = providers.Singleton(CooldownStore)
     rule_engine = providers.Singleton(
-        load_rule_engine, rule_repository, cooldown_store=cooldown_store
+        load_rule_engine,
+        rule_repository,
+        cooldown_store=cooldown_store,
+        sample=artifact_set.provided.sample,
+        sample_dir=artifact_set.provided.rules_sample_dir,
     )
 
     # Step 8: local RAG (configs/rag.yaml). The FAISS index is only loaded (built offline by
     # `make rag-index`); resolving the store without an index raises IndexNotBuiltError.
     rag_settings = providers.Singleton(load_rag_settings, CONFIG_DIR)
-    embedder = providers.Singleton(OllamaEmbedder, rag_settings.provided.embedding)
-    llm_client = providers.Singleton(OllamaLLMClient, rag_settings.provided.llm)
+    # Step 8-10 review (K5): one HTTP client per Ollama host, injected into the clients below.
+    # Timeouts are sent per request from each client's config.
+    embedding_http_client = providers.Singleton(
+        httpx.Client, base_url=rag_settings.provided.embedding.host
+    )
+    llm_http_client = providers.Singleton(httpx.Client, base_url=rag_settings.provided.llm.host)
+    embedder = providers.Singleton(
+        OllamaEmbedder, rag_settings.provided.embedding, embedding_http_client
+    )
+    llm_client = providers.Singleton(OllamaLLMClient, rag_settings.provided.llm, llm_http_client)
     vector_store = providers.Singleton(load_vector_store, rag_settings)
     retriever = providers.Singleton(
         HybridRetriever, embedder, vector_store, rag_settings.provided.retrieval
@@ -80,7 +98,9 @@ class Container(containers.DeclarativeContainer):
     # the agents from the services above (override any of them with a mock in tests).
     agents_settings = providers.Singleton(load_agent_settings, CONFIG_DIR)
     message_bus = providers.Singleton(MessageBus, agents_settings.provided.bus.max_depth)
-    planner_llm = providers.Singleton(build_planner_llm, rag_settings.provided.llm, agents_settings)
+    planner_llm = providers.Singleton(
+        build_planner_llm, rag_settings.provided.llm, agents_settings, llm_http_client
+    )
     planner = providers.Singleton(Planner, planner_llm, agents_settings)
     agent_factory = providers.Singleton(
         AgentFactory,
@@ -89,7 +109,7 @@ class Container(containers.DeclarativeContainer):
         scoring_service,
         context_adjuster,
         rule_engine,
-        rag_service,
+        rag_service.provider,
         planner,
     )
     coordinator = providers.Singleton(create_coordinator, agent_factory)
@@ -105,7 +125,7 @@ class Container(containers.DeclarativeContainer):
     api_agents_settings = providers.Singleton(agent_settings_for_api, agents_settings, api_settings)
     api_message_bus = providers.Singleton(MessageBus, agents_settings.provided.bus.max_depth)
     api_planner_llm = providers.Singleton(
-        build_planner_llm, rag_settings.provided.llm, api_agents_settings
+        build_planner_llm, rag_settings.provided.llm, api_agents_settings, llm_http_client
     )
     api_planner = providers.Singleton(Planner, api_planner_llm, api_agents_settings)
     api_agent_factory = providers.Singleton(
@@ -115,7 +135,7 @@ class Container(containers.DeclarativeContainer):
         scoring_service,
         context_adjuster,
         rule_engine,
-        rag_service,
+        rag_service.provider,
         api_planner,
     )
     api_coordinator = providers.Singleton(create_coordinator, api_agent_factory)

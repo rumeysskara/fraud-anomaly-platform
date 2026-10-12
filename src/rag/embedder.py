@@ -1,4 +1,4 @@
-"""Ollama embedding client (bge-m3). The HTTP client is injectable so tests can mock it."""
+"""Ollama embedding client (bge-m3). The HTTP client is injected (container / test mock)."""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 class OllamaEmbedder(Embedder):
     """Embeds texts with a local Ollama model through POST /api/embed."""
 
-    def __init__(self, config: EmbeddingConfig, client: httpx.Client | None = None) -> None:
+    def __init__(self, config: EmbeddingConfig, client: httpx.Client) -> None:
         self.config = config
-        self._client = client or httpx.Client(base_url=config.host, timeout=config.timeout_seconds)
+        self._client = client
 
     def embed(self, texts: list[str]) -> np.ndarray:
         """Return float32 vectors of shape (len(texts), dim); raises EmbeddingUnavailableError."""
@@ -34,7 +34,9 @@ class OllamaEmbedder(Embedder):
     def _embed_batch(self, texts: list[str]) -> np.ndarray:
         payload = {"model": self.config.model, "input": texts}
         try:
-            response = self._client.post("/api/embed", json=payload)
+            response = self._client.post(
+                "/api/embed", json=payload, timeout=self.config.timeout_seconds
+            )
         except httpx.HTTPError as exc:  # connection refused, timeout, ...
             raise EmbeddingUnavailableError(
                 f"Ollama embedding endpoint unreachable ({self.config.host}): {exc}"

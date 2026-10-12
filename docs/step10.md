@@ -15,7 +15,8 @@ Adım 3-9 servisleri tek bir FastAPI uygulamasında toplandı. Endpoint'ler ince
 | `src/api/online.py` | ham işlem -> kayıt -> katman skorları -> context -> kurallar; çevrimiçi geçmiş |
 | `src/api/services.py`, `mappers.py` | `/explain` ve `/rag/query` servisleri, yanıt eşlemeleri |
 | `src/api/errors.py` | tutarlı JSON hata zarfı (422/503/500) |
-| `src/api/config.py`, `configs/api.yaml` | LLM süre sınırı (60 sn), önbellek boyutları, `/rag/query` sınırları |
+| `src/api/config.py`, `configs/api.yaml` | LLM süre sınırı (toplam 60 sn = planlayıcı 10 + açıklama 50), önbellek boyutları, `/rag/query` sınırları |
+| `src/api/artifacts.py` | `SAMPLE_N`'e göre tam veri veya örneklem artifact yolları (container kullanır) |
 | `src/api/consistency.py`, `loadtest.py`, `examples.py` | batch = online kontrolü, gecikme testi, örnek istek üretimi |
 | `src/container.py` | yalnızca ekleme: `api_settings`, `online_scorer`, `api_*` agent kopyası, `explain_service`, `rag_query_service`, `health_service` |
 
@@ -86,11 +87,11 @@ Geçersiz kural seti (`rules_invalid.json`) -> 422:
 Eksik zorunlu alan: `{"error": {"code": "validation_error", "details": [{"field": "card1", "message": "Field required", "type": "missing"}, ...]}}`, HTTP 422.
 
 ## facts / narrative ayrımı (K-40)
-`facts` koddan gelir ve LLM'e bağlı değildir; rakamlar yalnızca burada otoritedir. `narrative` LLM metnidir ("destek bilgisi", karara etkisiz). Neden: 7B model bağlamı yanlış özetleyebiliyor (Adım 9 demo örneği). `llm_status`: `ok`, `unavailable` (Ollama/embedding kapalı), `timeout` (60 sn), `empty` (LLM kullanılabilir metin üretmedi), `error`. Bunlarda `narrative=null` ve HTTP 200; `/explain` ve `/rag/query` 500 vermez. Ollama kapalıyken `/score` etkilenmez (`/score` yolunda LLM nesnesi hiç çağrılmaz; test sahte LLM'in çağrılmadığını doğrular).
+`facts` koddan gelir ve LLM'e bağlı değildir; rakamlar yalnızca burada otoritedir. `narrative` LLM metnidir ("destek bilgisi", karara etkisiz). Neden: 7B model bağlamı yanlış özetleyebiliyor (Adım 9 demo örneği). `llm_status`: `ok`, `unavailable` (Ollama/embedding kapalı), `timeout` (toplam 60 sn; planlayıcı 10 sn + açıklama 50 sn, `configs/api.yaml`), `empty` (LLM kullanılabilir metin üretmedi), `skipped` (çalışan planda açıklama adımı yoktu), `error`. Bunlarda `narrative=null` ve HTTP 200; `/explain` ve `/rag/query` 500 vermez. Ollama kapalıyken `/score` etkilenmez (`/score` yolunda LLM nesnesi hiç çağrılmaz; test sahte LLM'in çağrılmadığını doğrular).
 
 ## Online yol ve batch = online tutarlılığı
 - `/score`: `FeaturePipeline.transform_one` (batch ile aynı feature kodu) -> `ScoringService.score_one` -> `ContextAdjustEngine.adjust_one` -> `RuleEngine.evaluate`. Entity geçmişi (Adım 3 `EntityStore`, Adım 4 saat deposu) açılışta `artifacts/` snapshot'ından (fit + holdout) yüklenir ve her yeni işlemle büyür.
-- Tutarlılık testi (`python -m src.api.consistency`, tam veri): holdout'tan 20 işlem (5 block, 5 review, 10 allow; holdout'a yayılmış), geçmiş fit sonuna sarılıp holdout sırayla işlenerek `/score` koduyla skorlandı ve `reports/rules/rule_hits.parquet` ile karşılaştırıldı. Sonuç: anomaly, adjusted, final ve dört katman skorunda en büyük mutlak fark 0.0 (tolerans 1e-3); karar ve tetiklenen kural listesi 20/20 aynı. Aynı kontrol `tests/api/test_batch_online_consistency.py` içinde sentetik veriyle koşar. R03 cooldown'u kontrol dışıdır (çevrimiçi depo boş başladığı için batch'te cooldown ile silinen satırlar atlanır).
+- Tutarlılık testi (`python -m src.api.consistency`, tam veri): holdout'tan 20 işlem (5 block, 5 review, 10 allow; holdout'a yayılmış), geçmiş fit sonuna sarılıp holdout sırayla işlenerek `/score` koduyla skorlandı ve `reports/rules/rule_hits.parquet` ile karşılaştırıldı. Sonuç: anomaly, adjusted, final ve dört katman skorunda en büyük mutlak fark 0.0 (tolerans 1e-3); karar ve tetiklenen kural listesi 20/20 aynı. Aynı kontrolün örneklem (`SAMPLE_N=50000`) sürümü `tests/api/test_batch_online_consistency.py` içindedir; gerçek veri okuduğu için `real_data` marker'ı ile varsayılan `make test`'ten çıkarıldı (`pytest -m real_data` ile koşar). Sentetik batch = online testleri alt katmanlardadır (`tests/features/test_batch_online_equality.py` vb.). R03 cooldown'u kontrol dışıdır (çevrimiçi depo boş başladığı için batch'te cooldown ile silinen satırlar atlanır).
 
 ## Gecikme ölçümü
 Makine: MacBook (Darwin 24, tek süreç, `make api`), tam veri artifact'ları, yerel Ollama (`qwen2.5:7b`, `bge-m3`). `python -m src.api.loadtest --score 200 --explain 6`, ardışık istekler, HTTP dahil duvar saati. Her istek yeni TransactionID.
@@ -100,12 +101,12 @@ Makine: MacBook (Darwin 24, tek süreç, `make api`), tam veri artifact'ları, y
 | `/score` | 200 | 186,5 ms | 264,5 ms | 357,4 ms |
 | `/explain` (LLM açık) | 6 | 44,7 sn | 52,0 sn | 52,0 sn |
 
-`/score` hedefi (< 1 sn) karşılanıyor. `/explain` süresinin neredeyse tamamı Ollama'dadır (planlayıcı gerekmeyen varsayılan planda bile RAG cevabı 16-50 sn); süre 60 sn'yi aşarsa `facts` ile `llm_status="timeout"` döner. Ölçüm küçük ve ardışıktır (eşzamanlı yük yok); `/explain` sayıları LLM kuyruğuna ve makineye bağlıdır.
+`/score` hedefi (< 1 sn) karşılanıyor. `/explain` süresinin neredeyse tamamı Ollama'dadır (planlayıcı gerekmeyen varsayılan planda bile RAG cevabı 16-50 sn); açıklama adımı 50 sn'yi (soru varsa planlayıcı ayrıca 10 sn'yi) aşarsa `facts` ile `llm_status="timeout"` döner; toplam süre 60 sn'yi geçmez. Ölçüm küçük ve ardışıktır (eşzamanlı yük yok); `/explain` sayıları LLM kuyruğuna ve makineye bağlıdır.
 
 ## Pipeline ve make hedefleri (K-43)
 `make pipeline` = `profile -> features -> score -> context -> rules` (Adım 1-7), her biri kendi hedefiyle de çalışır. `make rag-index` ayrıdır (Ollama gerekir), `make api` uvicorn'u başlatır (`127.0.0.1:8000`). Eski `index` adımı (var olmayan `scripts/build_index.py`) ve `make index` kaldırıldı; `score` adımı `scripts/run_scoring.py`'yi gerçekten çalıştırır (doğrulandı).
 
-`SAMPLE_N=50000 make pipeline` baştan sona hatasız çalıştı: toplam 46,6 sn (profile ~22 sn, features ~2 sn, score ~10 sn, context ~5 sn, rules ~8 sn).
+Container da `SAMPLE_N`'i okur: `SAMPLE_N=50000 make api` örneklem artifact'larıyla açılır (Adım 8-10 review, Ö4). `SAMPLE_N=50000 make pipeline` baştan sona hatasız çalıştı: toplam 46,6 sn (profile ~22 sn, features ~2 sn, score ~10 sn, context ~5 sn, rules ~8 sn).
 
 ## Testler
 `tests/api/` (50 test): TestClient + `container.<provider>.override` ile sahte LLM/RAG; tüm endpoint'ler; 422 (eksik alan, tür, negatif tutar, bilinmeyen alan, geçersiz kural seti, `k` sınırı); Ollama/embedding kapalı; zaman aşımı; `/score`'da LLM'in çağrılmaması; idempotent cooldown (aynı ID iki kez -> durum bir kez); `request` kural setinin durumu yazmaması; `/explain`'de LLM olmadan dolu `facts`; yanıt/örneklerde etiket alanı yok; alt katmanlar `src.api` import etmez; örnek dosyalar şemaya uyar.
@@ -118,3 +119,9 @@ Makine: MacBook (Darwin 24, tek süreç, `make api`), tam veri artifact'ları, y
 - Geçersiz kural seti yanıtı yalnızca şema hatalarını gösterir; bilinmeyen feature/param adları şema geçtikten sonra ayrı bir 422 olarak döner.
 - Gecikme ölçümü tek makinede, ardışık ve küçüktür; eşzamanlı yük testi yapılmadı. Kimlik doğrulama, rate limit ve TLS yok.
 - `/agents/analyze` (skill'de opsiyonel) yazılmadı; `/explain` agent akışını çalıştırır ve trace döner.
+- `/rules/reload` kural motorunu yeniler, RAG bilgi tabanındaki kural kartlarını yenilemez; açıklamaların güncel kartı kullanması için `make rag-index` tekrar çalıştırılmalıdır.
+- `/rules/reload`, eşzamanlı `/score` istekleriyle aynı kilidi kullanmaz; reload sırasında gelen bir istek eski ya da yeni kural setiyle değerlendirilebilir.
+- Bellek: API açılışı ~1,8 sn, süreç belleği (RSS) ~547 MB (tam veri artifact'ları, Adım 8-10 review ölçümü).
+
+## Bir sonraki adımın girdisi (teslim dokümanları)
+docs-writer için kaynaklar: bu dosyadaki endpoint tablosu, örnek istek/yanıtlar ve gecikme ölçümü; `examples/requests/` (curl örnekleri); `configs/api.yaml` (süre sınırı, önbellek boyutları); make hedefleri (`make pipeline`, `make rag-index`, `make api`). README'de API'nin artifact'lar üretildikten sonra başlatıldığı açıkça yazılmalıdır.

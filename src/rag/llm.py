@@ -1,4 +1,4 @@
-"""Ollama chat client (qwen2.5:7b). The HTTP client is injectable so tests can mock it."""
+"""Ollama chat client (qwen2.5:7b). The HTTP client is injected (container / test mock)."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ class OllamaLLMClient(LLMClient):
     fallback model is tried once.
     """
 
-    def __init__(self, config: LLMConfig, client: httpx.Client | None = None) -> None:
+    def __init__(self, config: LLMConfig, client: httpx.Client) -> None:
         self.config = config
-        self._client = client or httpx.Client(base_url=config.host, timeout=config.timeout_seconds)
+        self._client = client
 
     def generate(self, prompt: str, context: str = "") -> str:
         """Return the answer; raises LLMUnavailableError if Ollama or the model is missing."""
@@ -55,7 +55,9 @@ class OllamaLLMClient(LLMClient):
             },
         }
         try:
-            response = self._client.post("/api/chat", json=payload)
+            response = self._client.post(
+                "/api/chat", json=payload, timeout=self.config.timeout_seconds
+            )
         except httpx.HTTPError as exc:  # connection refused, timeout, ...
             raise LLMUnavailableError(
                 f"Ollama chat endpoint unreachable ({self.config.host}): {exc}"

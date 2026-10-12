@@ -20,4 +20,8 @@ extend-exclude = '/(\.venv)/'
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["ollama: needs a running Ollama and the built RAG index (run with -m ollama)"]
+markers = [
+    "ollama: needs a running Ollama and the built RAG index (run with -m ollama)",
+    "real_data: reads the real IEEE-CIS sample artifacts; not in the default suite (run with -m real_data)",
+]
+addopts = "-m 'not real_data'"

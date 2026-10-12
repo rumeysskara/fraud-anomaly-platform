@@ -124,7 +124,10 @@ class SuppressedRuleOut(BaseModel):
     message: str = ""
 
 
-LlmStatus = Literal["ok", "unavailable", "timeout", "empty", "error"]
+# skipped: the executed plan had no explainer step (valid LLM plan), so no narrative was asked for.
+LlmStatus = Literal["ok", "unavailable", "timeout", "empty", "error", "skipped"]
+# Longest analyst/RAG question accepted by /explain and /rag/query (keeps prompts small).
+MAX_QUESTION_CHARS = 1000
 
 
 # ---- /score ----------------------------------------------------------------------------------
@@ -158,7 +161,7 @@ class ExplainRequest(BaseModel):
     """Same transaction as /score plus an optional analyst question."""
 
     transaction: TransactionIn  # type: ignore[valid-type]
-    question: str | None = Field(default=None, max_length=1000)
+    question: str | None = Field(default=None, max_length=MAX_QUESTION_CHARS)
 
 
 class Thresholds(BaseModel):
@@ -299,7 +302,7 @@ class RagFilters(BaseModel):
 class RagQueryRequest(BaseModel):
     """Knowledge-base question."""
 
-    question: str = Field(min_length=3, max_length=1000)
+    question: str = Field(min_length=3, max_length=MAX_QUESTION_CHARS)
     k: int | None = Field(default=None, ge=1, description="Number of chunks (default: config).")
     filters: RagFilters | None = None
 

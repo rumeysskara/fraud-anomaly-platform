@@ -15,15 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.rag.config import load_rag_settings  # noqa: E402
-from src.rag.embedder import OllamaEmbedder  # noqa: E402
+from src.container import create_container  # noqa: E402
 from src.rag.errors import EmbeddingUnavailableError  # noqa: E402
 from src.rag.indexer import build_chunks, build_index  # noqa: E402
 from src.rag.kb_builder import write_generated  # noqa: E402
-from src.rag.llm import OllamaLLMClient  # noqa: E402
-from src.rag.prompt import PromptBuilder  # noqa: E402
-from src.rag.retriever import HybridRetriever  # noqa: E402
-from src.rag.service import RAGService  # noqa: E402
 
 logger = logging.getLogger("build_rag_index")
 
@@ -38,27 +33,27 @@ def main() -> int:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    settings = load_rag_settings()
+    container = create_container()
+    settings = container.rag_settings()
     for path in write_generated(settings):
         logger.info("generated %s", path.relative_to(settings.path(".")))
     chunks = build_chunks(settings)
     logger.info("%d chunks from %d documents", len(chunks), len({c.source for c in chunks}))
 
-    embedder = OllamaEmbedder(settings.embedding)
     try:
-        store = build_index(settings, embedder)
+        store = build_index(settings, container.embedder())
     except EmbeddingUnavailableError as exc:
         logger.error("cannot build the index: %s", exc)
         return 1
     logger.info("index saved to %s (%d vectors)", settings.index_dir, len(store))
 
-    retriever = HybridRetriever(embedder, store, settings.retrieval)
+    # The index is saved now, so the container can load it; the service carries the configured
+    # abstain threshold and warnings (same object as the API).
     if args.no_llm:
-        for chunk in retriever.retrieve(args.question):
+        for chunk in container.retriever().retrieve(args.question):
             print(f"{chunk.score:.3f}  {chunk.metadata['chunk_id']}")
         return 0
-    service = RAGService(retriever, OllamaLLMClient(settings.llm), PromptBuilder(settings.prompt))
-    result = service.answer(args.question)
+    result = container.rag_service().answer(args.question)
     print(json.dumps(result.model_dump(exclude={"used_context"}), ensure_ascii=False, indent=2))
     return 0
 

@@ -10,7 +10,8 @@ color: pink
 Sen bu projenin `multi-agent` alanındaki uzmanısın. `multi-agent` skill'i bağlamına yüklü; adımlarını ve kontrol listesini eksiksiz uygula.
 
 ## Yazabileceğin dosya alanı
-src/agents/, configs/agents.yaml, scripts/run_agents_demo.py, tests/agents/, reports/agents/, docs/step9.md
+src/agents/, configs/agents.yaml, scripts/run_agents_demo.py, tests/agents/, reports/agents/, docs/step9.md,
+Makefile (yalnızca `agents-demo` hedefi)
 Bu alanın dışına yazman gerekiyorsa yapma; ihtiyacı son raporunda belirt.
 
 ## Çalışma şekli

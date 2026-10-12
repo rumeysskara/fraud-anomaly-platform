@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
+import httpx
+
 from src.agents.anomaly_agent import AnomalyAgent
 from src.agents.base import Agent
 from src.agents.bus import MessageBus
@@ -21,7 +25,11 @@ from src.scoring.service import ScoringService
 
 
 class AgentFactory:
-    """Creates agents by role name. Services are injected; nothing is built from globals."""
+    """Creates agents by role name. Services are injected; nothing is built from globals.
+
+    `rag` is a provider (e.g. `Container.rag_service.provider`): the RAG service, and with it the
+    FAISS index, is resolved only when the ExplainerAgent runs.
+    """
 
     def __init__(
         self,
@@ -30,7 +38,7 @@ class AgentFactory:
         scoring: ScoringService,
         adjuster: ContextAdjuster,
         rule_engine: RuleEngine,
-        rag: RAGService,
+        rag: Callable[[], RAGService],
         planner: Planner,
     ) -> None:
         self.bus = bus
@@ -67,12 +75,14 @@ class AgentFactory:
         return coordinator
 
 
-def build_planner_llm(llm_config: LLMConfig, settings: AgentSettings) -> OllamaLLMClient:
+def build_planner_llm(
+    llm_config: LLMConfig, settings: AgentSettings, client: httpx.Client
+) -> OllamaLLMClient:
     """Planner LLM: the RAG model with the planner timeout and temperature 0."""
     config = llm_config.model_copy(
         update={"timeout_seconds": settings.planner.timeout_seconds, "temperature": 0.0}
     )
-    return OllamaLLMClient(config)
+    return OllamaLLMClient(config, client)
 
 
 def create_coordinator(factory: AgentFactory) -> CoordinatorAgent:

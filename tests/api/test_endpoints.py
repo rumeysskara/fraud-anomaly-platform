@@ -329,3 +329,21 @@ def test_openapi_lists_all_endpoints(client: TestClient) -> None:
     for path in ("/score", "/explain", "/rules", "/rules/reload", "/rules/evaluate", "/rag/query"):
         assert path in paths
     assert "/health" in paths
+
+
+def test_classify_llm_plan_without_explainer_is_skipped() -> None:
+    from src.agents.messages import AgentResponse, PlanInfo
+    from src.api.mappers import classify_llm
+
+    plan = PlanInfo(source="llm", steps=["anomaly:score", "context:adjust", "rule:evaluate"])
+    response = AgentResponse(correlation_id="c1", status="ok", plan=plan)
+    assert classify_llm(response) == "skipped"
+    assert classify_llm(response, "no answer within 60 s") == "timeout"
+
+
+def test_explain_without_rag_index_returns_facts_and_trace(world: World) -> None:
+    world.rag.error = IndexNotBuiltError("run make rag-index")
+    for client in make_client(world):
+        data = explain(client)
+        assert data["llm_status"] == "unavailable" and data["narrative"] is None
+        assert data["facts"]["decision"] == "allow" and data["trace"]

@@ -252,3 +252,33 @@ Kararları geliştirici verir; Claude Code seçenekleri sunar.
 - **Karar (geliştirici seçimi, küçük):** `make pipeline` yalnızca batch adımlarını çalıştırır: `profile, features, score, context, rules` (`scripts/run_pipeline.py`); her adımın kendi hedefi vardır. Olmayan `scripts/build_index.py`'ye bağlı `index` adımı ve `make index` kaldırıldı; RAG indeksi `make rag-index` ile ayrıdır (Ollama gerekir). Eksik betik artık "atla" değil hata verir.
 - **Alternatifler:** `rag-index`'i pipeline'a eklemek; eski adları takma ad olarak tutmak.
 - **Neden seçildi:** Pipeline Ollama olmadan çalışabilmeli; sessizce atlanan adım hatayı gizler.
+
+### K-44: RAG servisi agent'a sağlayıcı olarak verilir (Adım 8-10 review, Ö1)
+- **Karar (kullanıcı kararı):** `AgentFactory` ve `ExplainerAgent`, `RAGService` nesnesinin kendisini değil, onu üreten sağlayıcıyı (`Container.rag_service.provider`) alır; servis ve FAISS indeksi yalnızca açıklama adımı çalışınca yüklenir. İndeks yoksa skor, context ve kural adımları ile trace yine döner.
+- **Alternatifler:** `ExplainService` içinde coordinator'ı try bloğunda çözmek (trace kaybolur, demo yine çöker); indeks yoksa boş store dönmek (Adım 8 hata sözleşmesi değişir, yanlış kurulum gizlenir).
+- **Neden seçildi:** Davranış tek yerde (agent) düzelir; hem `/explain` hem `make agents-demo` Ollama/indeks olmadan çalışır ("geç bağlama").
+
+### K-45: Retrieval yapılamazsa şablon açıklama (Adım 8-10 review, Ö2)
+- **Karar (kullanıcı kararı):** ExplainerAgent `IndexNotBuiltError` ve `EmbeddingUnavailableError` hatalarını yakalar, şablon açıklama döner (`flags=["rag_unavailable","explanation_fallback"]`); API'de `llm_status="unavailable"`. README, step8 ve step9 dokümanları bu davranışa göre düzeltildi.
+- **Alternatifler:** Yalnızca dokümanı düzeltmek; kodu düzeltip dokümanı bırakmak.
+- **Neden seçildi:** Embedding de Ollama'da çalıştığı için "Ollama kapalı" çoğunlukla "retrieval yok" demektir; doküman ile davranış aynı olmalı.
+
+### K-46: Gerçek veri okuyan test varsayılan suite dışında (Adım 8-10 review, Ö3)
+- **Karar (kullanıcı kararı):** `tests/api/test_batch_online_consistency.py` `real_data` marker'ı alır; `pyproject.toml` `addopts = "-m 'not real_data'"` ile `make test` dışında kalır (`pytest -m real_data` ile koşar).
+- **Alternatifler:** Ek olarak sentetik bir API batch = online testi yazmak; yalnızca dokümanı düzeltmek (kural ihlali sürer).
+- **Neden seçildi:** CLAUDE.md "testler gerçek veriye bağlı değildir" der; sentetik batch = online testleri alt katmanlarda zaten var.
+
+### K-47: Container `SAMPLE_N`'e göre artifact seçer (Adım 8-10 review, Ö4)
+- **Karar (kullanıcı kararı):** `src/api/artifacts.py` `resolve_artifact_set(get_sample_n())` tam veri veya `*_sample` / `sample/` yollarını döner; container feature pipeline, detector'lar, context parametreleri ve kural parametrelerini buradan yükler.
+- **Alternatifler:** Yalnızca dokümante etmek; `configs/api.yaml` içinde `artifact_set: full|sample` ayarı.
+- **Neden seçildi:** Pipeline zaten `SAMPLE_N` ile çalışıyor; aynı değişkeni okumak ikinci bir ayarı ve uyumsuzluk riskini ortadan kaldırır.
+
+### K-48: /explain süre bütçesi statik bölünür (Adım 8-10 review, Ö5)
+- **Karar (kullanıcı kararı):** `configs/api.yaml`: `timeout_seconds: 60` toplam; `planner_timeout_seconds: 10`, `explainer_timeout_seconds: 50`. Toplamı aşan bölme config doğrulamasında reddedilir.
+- **Alternatifler:** İstek başına kalan süreyi paylaştıran dinamik bütçe; yalnızca dokümanı düzeltmek.
+- **Neden seçildi:** Basit ve anlatılabilir; planlayıcı kısa bir JSON üretir (10 sn yeter), süre açıklamaya kalır. Önceki durumda iki adım ayrı ayrı 60 sn alabildiği için toplam 120 sn'ye çıkabiliyordu.
+
+### K-49: Geliştirme agent'larının dosya alanları güncellendi (Adım 8-10 review, Ö6)
+- **Karar (kullanıcı kararı):** `.claude/agents/rag-engineer.md`, `agent-orchestrator.md`, `api-engineer.md` dosya alanları gerçekte yazılan dosyalara göre güncellendi (ör. `configs/rag.yaml`, `artifacts/rag/`, `configs/api.yaml`, `examples/`, Makefile'da yalnızca kendi hedefi).
+- **Alternatifler:** İstisnayı yalnızca burada kaydetmek; dosyaları agent alanlarına geri taşımak (pratik değil).
+- **Neden seçildi:** Kod CLAUDE.md'deki `artifacts/` kuralına eski tanımdan daha uygun; tanım gerçeği yansıtmalı.

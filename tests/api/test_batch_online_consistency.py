@@ -1,7 +1,9 @@
 """Batch = online: 20 holdout transactions scored by the API code equal the batch output.
 
-Uses the SAMPLE_N=50000 artifacts and reports (`SAMPLE_N=50000 make pipeline`); skipped when they
-are not there. The full-data version is `python -m src.api.consistency`.
+Uses the SAMPLE_N=50000 artifacts and reports (`SAMPLE_N=50000 make pipeline`), i.e. real data,
+so it is marked `real_data` and excluded from `make test` (run: pytest -m real_data). It is also
+skipped when the files are not there. The full-data version is `python -m src.api.consistency`.
+Synthetic batch = online tests live in the lower layers (tests/features, tests/context, ...).
 """
 
 from __future__ import annotations
@@ -43,6 +45,7 @@ def http_score_fn(scorer: OnlineScorer) -> Callable[[dict[str, Any]], dict[str, 
     return call
 
 
+@pytest.mark.real_data
 @pytest.mark.skipif(not all(p.exists() for p in NEEDED), reason="sample artifacts not built")
 def test_twenty_holdout_transactions_match_the_batch_output() -> None:
     result = run_check(sample=True, n=20, spread=False, make_score_fn=http_score_fn)

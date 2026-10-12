@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.agents.config import AgentSettings
 from src.core.config import CONFIG_DIR, load_yaml
@@ -14,9 +14,25 @@ API_CONFIG_FILE = "api.yaml"
 
 
 class LLMSettings(BaseModel):
-    """Deadline for every call that may wait for the local LLM (/explain, /rag/query)."""
+    """Deadlines for calls that wait for the local LLM.
+
+    timeout_seconds is the total budget of one /explain or /rag/query request. /explain runs the
+    planner and then the explainer one after the other, so the budget is split statically between
+    them (Step 8-10 review, Ö5); their sum may not exceed the total.
+    """
 
     timeout_seconds: float = Field(default=60.0, gt=0)
+    planner_timeout_seconds: float = Field(default=10.0, gt=0)
+    explainer_timeout_seconds: float = Field(default=50.0, gt=0)
+
+    @model_validator(mode="after")
+    def _split_fits_total(self) -> LLMSettings:
+        if self.planner_timeout_seconds + self.explainer_timeout_seconds > self.timeout_seconds:
+            raise ValueError(
+                "planner_timeout_seconds + explainer_timeout_seconds must not exceed "
+                "timeout_seconds"
+            )
+        return self
 
 
 class OnlineSettings(BaseModel):
@@ -36,7 +52,6 @@ class RagApiSettings(BaseModel):
     """Limits of POST /rag/query."""
 
     max_k: int = Field(default=10, ge=1)
-    max_question_chars: int = Field(default=1000, ge=1)
 
 
 class ApiSettings(BaseModel):
@@ -56,13 +71,18 @@ def load_api_settings(config_dir: Path = CONFIG_DIR) -> ApiSettings:
 
 
 def agent_settings_for_api(agents: AgentSettings, api: ApiSettings) -> AgentSettings:
-    """Copy of the agent settings whose LLM deadlines are capped by the API deadline.
+    """Copy of the agent settings whose LLM deadlines are capped by the API budget split.
 
-    configs/agents.yaml keeps the long batch/demo limits (explainer 240 s); the API answers
-    within `llm.timeout_seconds` (default 60 s) and returns the facts when that is not enough.
+    configs/agents.yaml keeps the long batch/demo limits (explainer 240 s); the API caps the
+    planner and the explainer with their share of `llm.timeout_seconds` (default 10 s + 50 s), so
+    /explain answers within the total and returns the facts when that is not enough.
     """
-    limit = api.llm.timeout_seconds
+    llm = api.llm
     settings = agents.model_copy(deep=True)
-    settings.explainer.timeout_seconds = min(settings.explainer.timeout_seconds, limit)
-    settings.planner.timeout_seconds = min(settings.planner.timeout_seconds, limit)
+    settings.explainer.timeout_seconds = min(
+        settings.explainer.timeout_seconds, llm.explainer_timeout_seconds
+    )
+    settings.planner.timeout_seconds = min(
+        settings.planner.timeout_seconds, llm.planner_timeout_seconds
+    )
     return settings

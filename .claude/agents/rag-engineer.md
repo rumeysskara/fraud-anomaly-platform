@@ -10,7 +10,8 @@ color: purple
 Sen bu projenin `rag-pipeline` alanındaki uzmanısın. `rag-pipeline` skill'i bağlamına yüklü; adımlarını ve kontrol listesini eksiksiz uygula.
 
 ## Yazabileceğin dosya alanı
-src/rag/, knowledge_base/, scripts/build_index.py, tests/rag/, data/vector_store/, docs/step8.md
+src/rag/, knowledge_base/, configs/rag.yaml, scripts/build_rag_index.py, tests/rag/, artifacts/rag/, docs/step8.md,
+Makefile (yalnızca `rag-index` hedefi), pyproject.toml (yalnızca RAG bağımlılıkları ve `ollama` marker'ı), README.md (yalnızca Ollama/RAG bölümü)
 Bu alanın dışına yazman gerekiyorsa yapma; ihtiyacı son raporunda belirt.
 
 ## Çalışma şekli

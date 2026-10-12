@@ -26,8 +26,9 @@ make rag-index               # bilgi tabanını üret, chunk'la, embed et -> art
 python scripts/build_rag_index.py --question "Kart testi hangi koşulda tetiklenir?"
 .venv/bin/python -m pytest -m ollama -s tests/rag   # gerçek retrieval testi (hit@k)
 ```
-`make test` Ollama gerektirmez. Ollama kapalıysa RAG servisi yalnızca retrieval sonucu döner
-(`llm_unavailable`). Ayrıntı: `docs/step8.md`.
+`make test` Ollama gerektirmez. Yalnızca LLM kapalıysa RAG servisi retrieval sonucunu döner
+(`llm_unavailable`); Ollama tamamen kapalıysa (embedding de yok) retrieval yapılamaz ve `/explain`
+şablon açıklamayla `llm_status="unavailable"` döner. Ayrıntı: `docs/step8.md`, `docs/step9.md`.
 
 ## Çalıştırma
 Batch adımları tek komutla sırayla çalışır; her adımın kendi hedefi de vardır (adım numaralarıyla eşleşir):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from src.agents.base import Agent
 from src.agents.bus import MessageBus
@@ -15,9 +16,11 @@ from src.agents.messages import (
     ExplainRequest,
 )
 from src.agents.timeouts import call_with_timeout
+from src.rag.errors import EmbeddingUnavailableError, IndexNotBuiltError
 from src.rag.service import CITATION, RAGService
 
 SCORE_SOURCE = "score"  # decision_source of a review that came from the score threshold
+RAG_UNAVAILABLE = "rag_unavailable"  # flag: no index or no embedding model, template used
 
 
 def strip_task_sentences(question: str | None, patterns: list[str]) -> str:
@@ -49,12 +52,18 @@ class ExplainerAgent(Agent):
     Triggered rule ids come from the RuleAgent result in the request. The query is built from the
     real reason of the decision (K-39). If the RAG answer is empty or only a source line, a
     template text (decision reason, top layer scores, applied C rules) replaces it and the trace
-    gets `explanation_fallback`. Both outputs are labelled as supporting information; the reply
-    type has no decision field and the coordinator never reads one from it. RAG or timeout errors
-    become an error reply (explanation=null in the response).
+    gets `explanation_fallback`. The same template is used when retrieval is impossible (index
+    not built or embedding model down; flag `rag_unavailable`). Both outputs are labelled as
+    supporting information; the reply type has no decision field and the coordinator never reads
+    one from it. Other RAG errors and timeouts become an error reply (explanation=null).
+
+    `rag` is a provider (callable) resolved at explain time, so a missing index affects only this
+    step: scoring, context and rules still run and the trace is kept (Step 8-10 review, Ö1).
     """
 
-    def __init__(self, bus: MessageBus, rag: RAGService, config: ExplainerConfig) -> None:
+    def __init__(
+        self, bus: MessageBus, rag: Callable[[], RAGService], config: ExplainerConfig
+    ) -> None:
         super().__init__(EXPLAINER, bus)
         self.rag = rag
         self.config = config
@@ -96,12 +105,23 @@ class ExplainerAgent(Agent):
         request = ExplainRequest.model_validate(message.payload)
         result = request.rule_result
         query = self.build_query(request)
-        answer = call_with_timeout(
-            lambda: self.rag.answer(
-                query, explanation=result.explain, rule_ids=result.triggered_rules
-            ),
-            self.config.timeout_seconds,
-        )
+        try:
+            answer = call_with_timeout(
+                lambda: self.rag().answer(
+                    query, explanation=result.explain, rule_ids=result.triggered_rules
+                ),
+                self.config.timeout_seconds,
+            )
+        except (IndexNotBuiltError, EmbeddingUnavailableError) as exc:
+            self.bus.note(message.correlation_id, self.name, "explanation_fallback", str(exc))
+            return ExplainReply(
+                label=self.config.label,
+                text=self.template_text(request),
+                origin="template",
+                grounded=False,
+                flags=[RAG_UNAVAILABLE, "explanation_fallback"],
+                warning=f"{type(exc).__name__}: {exc}",
+            )
         reply = ExplainReply(
             label=self.config.label,
             text=answer.answer,

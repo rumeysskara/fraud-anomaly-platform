@@ -10,7 +10,8 @@ color: blue
 Sen bu projenin `fastapi-service` alanındaki uzmanısın. `fastapi-service` skill'i bağlamına yüklü; adımlarını ve kontrol listesini eksiksiz uygula.
 
 ## Yazabileceğin dosya alanı
-src/api/, src/container.py, tests/api/, docs/step10.md, README.md (Çalıştırma bölümü)
+src/api/, src/container.py, configs/api.yaml, examples/, tests/api/, docs/step10.md, README.md (Çalıştırma bölümü),
+Makefile ve scripts/run_pipeline.py (yalnızca `api` hedefi ve pipeline adım sırası)
 Bu alanın dışına yazman gerekiyorsa yapma; ihtiyacı son raporunda belirt.
 
 ## Çalışma şekli

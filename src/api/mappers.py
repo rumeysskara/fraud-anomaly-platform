@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.agents.messages import AgentResponse
+from src.agents.messages import EXPLAINER, INTENT_EXPLAIN, AgentResponse
 from src.api.online import ScoreOutcome
 from src.api.schemas import (
     AgentInfo,
@@ -113,13 +113,15 @@ def classify_llm(response: AgentResponse | None, error: str | None = None) -> Ll
     """llm_status of /explain from the agent response.
 
     ok: a RAG narrative exists. timeout/unavailable/error: the explainer step failed.
-    unavailable also covers a template fallback caused by a missing LLM; empty: the LLM answered
-    with nothing usable.
+    unavailable also covers a template fallback caused by a missing LLM, index or embedding;
+    empty: the LLM answered with nothing usable; skipped: the executed plan had no explainer step.
     """
     if response is None:
         return "error"
     explanation = response.explanation
     if explanation is None:
+        if error is None and f"{EXPLAINER}:{INTENT_EXPLAIN}" not in response.plan.steps:
+            return "skipped"
         text = " ".join([*response.errors, error or ""]).lower()
         if "no answer within" in text:
             return "timeout"
@@ -127,7 +129,8 @@ def classify_llm(response: AgentResponse | None, error: str | None = None) -> Ll
             return "unavailable"
         return "error"
     if explanation.origin == "template":
-        return "unavailable" if "llm_unavailable" in explanation.flags else "empty"
+        unavailable = {"llm_unavailable", "rag_unavailable"} & set(explanation.flags)
+        return "unavailable" if unavailable else "empty"
     return "ok"
 
 

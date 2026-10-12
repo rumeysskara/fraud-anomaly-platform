@@ -68,7 +68,7 @@ Koordinatör her adıma o ana kadarki sonuçları verir. Bir adımda girdi eksik
 
 ### Planlama (K-37)
 - Soru yoksa: varsayılan plan, LLM çağrılmaz.
-- Soru varsa: yerel LLM'den `{"steps":[{"agent","intent"}]}` istenir. Pydantic doğrulaması: ek alan yok, yalnızca config'teki agent:intent çiftleri, tekrar yok, bağımlılık sırasında, `rule:evaluate` zorunlu. LLM kapalı, zaman aşımı (60 sn), geçersiz JSON, izinsiz agent, sıra hatası veya eksik kural adımı: varsayılan plana düşülür ve trace'e `plan_fallback` + sebep yazılır.
+- Soru varsa: yerel LLM'den `{"steps":[{"agent","intent"}]}` istenir. Pydantic doğrulaması: ek alan yok, yalnızca config'teki agent:intent çiftleri, tekrar yok, bağımlılık sırasında, `rule:evaluate` zorunlu. LLM kapalı, zaman aşımı (batch/demo 60 sn, API 10 sn), geçersiz JSON, izinsiz agent, sıra hatası veya eksik kural adımı: varsayılan plana düşülür ve trace'e `plan_fallback` + sebep yazılır.
 - Plan karar kaynağını değiştiremez: kural adımı zorunlu, karar yalnızca `EvaluateReply`'dan kopyalanır, `ExplainReply` tipinde karar alanı yoktur. Testler: LLM'in "decision: allow" eklemesi reddedilir, açıklama metni "allow" dese de karar `block` kalır, kural adımsız plan reddedilir.
 
 ## Dayanıklılık (K-38)
@@ -76,7 +76,8 @@ Koordinatör her adıma o ana kadarki sonuçları verir. Bir adımda girdi eksik
 |---|---|
 | RAG cevabı boş / yalnızca kaynak satırı / LLM yok | Şablon açıklama, `origin=template`, trace'te `explanation_fallback` |
 | ExplainerAgent hatası / zaman aşımı (240 sn) | Karar aynen döner, `explanation=null`, `status=degraded`, trace'te `explainer` `status=error` |
-| Ollama kapalıyken RAG | RAG retrieval-only döner (`llm_unavailable`, `text=null`); agent bunu boş sayıp şablon açıklamaya düşer, kaynaklar korunur |
+| Embedding çalışıyor, LLM kapalı | RAG retrieval-only döner (`llm_unavailable`, `text=null`); agent bunu boş sayıp şablon açıklamaya düşer, kaynaklar korunur |
+| Ollama tamamen kapalı (embedding de yok) veya indeks kurulmamış | Retrieval yapılamaz (`EmbeddingUnavailableError` / `IndexNotBuiltError`); agent şablon açıklama döner, `flags=["rag_unavailable","explanation_fallback"]`, kaynak yok. RAG servisi agent'a sağlayıcı (provider) olarak verildiği için indeks yalnızca bu adımda yüklenir; skor, context, kural adımları ve trace etkilenmez (Adım 8-10 review, Ö1/Ö2) |
 | Planlayıcı LLM hatası | Varsayılan plan, `plan_fallback` |
 | Anomaly/Context hatası | Hata kaydedilir; RuleAgent skoru kendisi ister, o da başarısızsa `decision=null`, `status=error` |
 | RuleAgent hatası | `decision=null`, `status=error`; karar uydurulmaz |
@@ -127,7 +128,7 @@ Block örneğinde (varsayılan plan) açıklama R01 kartından ve operasyon rehb
 Container (yalnızca ekleme): `agents_settings`, `message_bus`, `planner_llm`, `planner`, `agent_factory`, `coordinator` (hepsi Singleton). Testlerde `container.rule_engine.override(...)`, `container.rag_service.override(...)` vb. kullanılır. Tasarım desenleri: Mediator (bus), Factory (`AgentFactory`), Strategy/Chain (plan adımları sırayla), Repository (kural yükleme Adım 7'de).
 
 ## Komutlar
-`make agents-demo` (Ollama ve `make rag-index` gerekir; Ollama yoksa demo yine biter, plan varsayılana düşer ve açıklama şablondan gelir). Testler: `make test` (Ollama gerekmez).
+`make agents-demo` (en iyi sonuç için Ollama ve `make rag-index` gerekir; Ollama veya indeks yoksa demo yine biter: plan varsayılana düşer, açıklama şablondan gelir). Testler: `make test` (Ollama gerekmez).
 
 ## Bilinen sınırlar
 - **Gecikme:** açıklama adımı 16-42 sn (RAG, yerel 7B model; ilk istekte model yükleme dahil), LLM planı 3,5-4,6 sn. Karar ise 0,1-0,2 sn'de hazırdır; asıl bekleyen açıklamadır. Bus eşzamanlıdır (K-36), bir istek bitene kadar bir worker meşgul olur.
@@ -138,7 +139,7 @@ Container (yalnızca ekleme): `agents_settings`, `message_bus`, `planner_llm`, `
 - **Retry ve paralellik yok;** mesajlar süreç içidir, kalıcı kuyruk yoktur.
 - **Online kayıt hazır gelir:** agent'lar feature'lı kaydı bekler (`entity_key`, `has_device`, `email_ent_known`, cooldown anahtarları dahil); ham işlemden bu kaydı üretmek API adımının işidir. Demo kaydı `data/processed` parquet'lerinden kurar.
 - **Agent yolu cooldown depoya yazmaz** (K-35); Adım 10'da yalnızca `/score` yazar.
-- **Açıklama sorgusu:** serbest metin soru olduğu gibi RAG sorgusu olur; sorgu yeniden yazımı yoktur.
+- **Açıklama sorgusu:** görev cümleleri regex ile çıkarıldıktan sonra kalan metin RAG sorgusu olur (K-39); LLM tabanlı yeniden yazım yoktur.
 
 ## Bir sonraki adımın girdisi (Adım 10: API)
 - `Container.coordinator().analyze(AnalystRequest(record=..., question=...)) -> AgentResponse` tek giriş noktasıdır; yanıt `decision`, `reasons`, `explanation` (destek bilgisi) ve `trace` içerir.
