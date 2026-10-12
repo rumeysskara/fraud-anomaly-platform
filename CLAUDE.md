@@ -48,7 +48,7 @@ Teknik dokümanda yalnızca `src/agents/` anlatılır.
 ## Kod standartları
 - Type hint zorunlu, public fonksiyonlarda docstring. ruff + black (pyproject.toml).
 - Her modül için en az bir pytest, küçük sentetik veriyle.
-- Notebook yok; analizler `scripts/` altında, çıktılar `reports/` altına.
+- Analizler `scripts/` altında; notebooks/ yalnızca keşifsel EDA içindir, pipeline'ın parçası değildir. Çıktılar `reports/` altına.
 - Pipeline tek komutla çalışır: `make pipeline` (veya `python scripts/run_pipeline.py`).
 
 ## Agent çalışma düzeni
