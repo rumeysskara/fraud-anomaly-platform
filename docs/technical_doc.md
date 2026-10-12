@@ -1023,11 +1023,11 @@ bağlamı yanlış özetleyebiliyor; tek metin alanında yanlış bir rakam anal
 Bu durumların hepsinde `narrative=null` ve HTTP 200; `/explain` ve `/rag/query` 500 vermez. `/score` yolunda
 LLM hiç çağrılmaz (test sahte LLM'in çağrılmadığını doğrular).
 
-**Süre bütçesi** (`configs/api.yaml`, K-48, K-51): toplam 120 sn = planlayıcı 10 sn (yalnızca soru varsa) +
-açıklama 110 sn; toplamı aşan bölme config doğrulamasında reddedilir. Açıklama üretimi `num_predict: 300`
+**Süre bütçesi** (`configs/api.yaml`, K-48, K-51): toplam 120 sn = planlayıcı 20 sn (yalnızca soru varsa) +
+açıklama 100 sn; toplamı aşan bölme config doğrulamasında reddedilir. Açıklama üretimi `num_predict: 300`
 token ve prompt'taki "4-6 cümle" talimatıyla kısa tutulur; API açılışında modeller arka planda ısıtılır ve
 `keep_alive: 30m` ile bellekte kalır (K-50). Isınmış modelle ölçüm: `explain_review` 91,2 sn, `explain_question`
-76,4 sn, ikisi de `llm_status=ok` (`docs/step10.md`). API'nin agent kopyası daha kısa süreyle
+79,5 sn (plan LLM'den), ikisi de `llm_status=ok` (`docs/step10.md`). API'nin agent kopyası daha kısa süreyle
 kurulur; batch/demo betikleri `configs/agents.yaml` sürelerini (planlayıcı 60 sn, açıklama 240 sn) kullanır (K-41).
 
 ### 12.4 Online yol, tutarlılık ve gecikme

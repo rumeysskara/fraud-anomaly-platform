@@ -37,7 +37,7 @@ def test_api_agents_use_a_separate_bus_and_the_api_deadline() -> None:
     api = container.api_settings()
     assert api.llm.timeout_seconds == 120.0
     capped = container.api_agents_settings()
-    assert capped.planner.timeout_seconds == 10.0 and capped.explainer.timeout_seconds == 110.0
+    assert capped.planner.timeout_seconds == 20.0 and capped.explainer.timeout_seconds == 100.0
     assert container.agents_settings().explainer.timeout_seconds == 240.0  # Step 9 unchanged
     assert container.api_message_bus() is not container.message_bus()
 

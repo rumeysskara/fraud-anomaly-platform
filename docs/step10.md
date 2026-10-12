@@ -15,7 +15,7 @@ Adım 3-9 servisleri tek bir FastAPI uygulamasında toplandı. Endpoint'ler ince
 | `src/api/online.py` | ham işlem -> kayıt -> katman skorları -> context -> kurallar; çevrimiçi geçmiş |
 | `src/api/services.py`, `mappers.py` | `/explain` ve `/rag/query` servisleri, yanıt eşlemeleri |
 | `src/api/errors.py` | tutarlı JSON hata zarfı (422/503/500) |
-| `src/api/config.py`, `configs/api.yaml` | LLM süre sınırı (toplam 120 sn = planlayıcı 10 + açıklama 110, K-51), önbellek boyutları, `/rag/query` sınırları |
+| `src/api/config.py`, `configs/api.yaml` | LLM süre sınırı (toplam 120 sn = planlayıcı 20 + açıklama 100, K-51), önbellek boyutları, `/rag/query` sınırları |
 | `src/api/artifacts.py` | `SAMPLE_N`'e göre tam veri veya örneklem artifact yolları (container kullanır) |
 | `src/api/consistency.py`, `loadtest.py`, `examples.py` | batch = online kontrolü, gecikme testi, örnek istek üretimi |
 | `src/container.py` | yalnızca ekleme: `api_settings`, `online_scorer`, `api_*` agent kopyası, `explain_service`, `rag_query_service`, `health_service` |
@@ -87,7 +87,7 @@ Geçersiz kural seti (`rules_invalid.json`) -> 422:
 Eksik zorunlu alan: `{"error": {"code": "validation_error", "details": [{"field": "card1", "message": "Field required", "type": "missing"}, ...]}}`, HTTP 422.
 
 ## facts / narrative ayrımı (K-40)
-`facts` koddan gelir ve LLM'e bağlı değildir; rakamlar yalnızca burada otoritedir. `narrative` LLM metnidir ("destek bilgisi", karara etkisiz). Neden: 7B model bağlamı yanlış özetleyebiliyor (Adım 9 demo örneği). `llm_status`: `ok`, `unavailable` (Ollama/embedding kapalı), `timeout` (toplam 120 sn; planlayıcı 10 sn + açıklama 110 sn, `configs/api.yaml`), `empty` (LLM kullanılabilir metin üretmedi), `skipped` (çalışan planda açıklama adımı yoktu; K-51'den sonra soru içeren LLM planı açıklama adımı içermek zorunda olduğu için yalnızca config değişirse görülür), `error`. Bunlarda `narrative=null` ve HTTP 200; `/explain` ve `/rag/query` 500 vermez. Ollama kapalıyken `/score` etkilenmez (`/score` yolunda LLM nesnesi hiç çağrılmaz; test sahte LLM'in çağrılmadığını doğrular).
+`facts` koddan gelir ve LLM'e bağlı değildir; rakamlar yalnızca burada otoritedir. `narrative` LLM metnidir ("destek bilgisi", karara etkisiz). Neden: 7B model bağlamı yanlış özetleyebiliyor (Adım 9 demo örneği). `llm_status`: `ok`, `unavailable` (Ollama/embedding kapalı), `timeout` (toplam 120 sn; planlayıcı 20 sn + açıklama 100 sn, `configs/api.yaml`), `empty` (LLM kullanılabilir metin üretmedi), `skipped` (çalışan planda açıklama adımı yoktu; K-51'den sonra soru içeren LLM planı açıklama adımı içermek zorunda olduğu için yalnızca config değişirse görülür), `error`. Bunlarda `narrative=null` ve HTTP 200; `/explain` ve `/rag/query` 500 vermez. Ollama kapalıyken `/score` etkilenmez (`/score` yolunda LLM nesnesi hiç çağrılmaz; test sahte LLM'in çağrılmadığını doğrular).
 
 ## Online yol ve batch = online tutarlılığı
 - `/score`: `FeaturePipeline.transform_one` (batch ile aynı feature kodu) -> `ScoringService.score_one` -> `ContextAdjustEngine.adjust_one` -> `RuleEngine.evaluate`. Entity geçmişi (Adım 3 `EntityStore`, Adım 4 saat deposu) açılışta `artifacts/` snapshot'ından (fit + holdout) yüklenir ve her yeni işlemle büyür.
@@ -101,16 +101,17 @@ Makine: MacBook (Darwin 24, tek süreç, `make api`), tam veri artifact'ları, y
 | `/score` | 200 | 186,5 ms | 264,5 ms | 357,4 ms |
 | `/explain` (LLM açık) | 6 | 44,7 sn | 52,0 sn | 52,0 sn |
 
-K-50/K-51 sonrası tek tek ölçüm (aynı makine, API açılışından sonra ısıtma tamamlanınca, ardışık; `num_predict: 300`, prompt "4-6 cümle", bütçe 10 + 110 sn):
+K-50/K-51 sonrası tek tek ölçüm (aynı makine, API açılışından sonra ısıtma tamamlanınca; `num_predict: 300`, prompt "4-6 cümle"):
 
-| İstek | Süre | `llm_status` | Plan |
-|---|---|---|---|
-| `examples/requests/explain_review.json` (soru yok) | 91,2 sn | `ok` (grounded) | varsayılan |
-| `examples/requests/explain_question.json` ("Bu işlem neden bloklandı?") | 76,4 sn | `ok` (grounded) | `fallback` (planlayıcı 10 sn'de cevap vermedi), varsayılan plan açıklamayı içerdi |
+| İstek | Bütçe (planlayıcı + açıklama) | Süre | `llm_status` | Plan |
+|---|---|---|---|---|
+| `examples/requests/explain_review.json` (soru yok) | 10 + 110 sn | 91,2 sn | `ok` (grounded) | varsayılan |
+| `examples/requests/explain_question.json` ("Bu işlem neden bloklandı?") | 10 + 110 sn | 76,4 sn | `ok` (grounded) | `fallback` (planlayıcı 10 sn'de cevap vermedi; `explain_review`'in hemen ardından), varsayılan plan açıklamayı içerdi |
+| `examples/requests/explain_question.json` | 20 + 100 sn (güncel) | 79,5 sn | `ok` (grounded) | `llm`: `['rule:evaluate', 'explainer:explain']`, `plan_fallback` yok (açılış ve ısıtmadan sonraki ilk istek) |
 
 K-50 öncesi ısınmış modelle `explain_review.json` 50,4 sn'de `timeout` vermişti. Planlayıcı tek başına ölçüldüğünde sıcak modelle 5,2-5,8 sn'de `['rule:evaluate', 'explainer:explain']` planı üretti (4 deneme); RAG üretiminin hemen ardından gelen ilk çağrı ise 10 sn'yi aşabildi.
 
-`/score` hedefi (< 1 sn) karşılanıyor. `/explain` süresinin neredeyse tamamı Ollama'dadır (planlayıcı gerekmeyen varsayılan planda bile RAG cevabı 16-50 sn); açıklama adımı 110 sn'yi (soru varsa planlayıcı ayrıca 10 sn'yi) aşarsa `facts` ile `llm_status="timeout"` döner; toplam süre 120 sn'yi geçmez (K-51; önceki bütçe 60 sn idi). Ölçüm küçük ve ardışıktır (eşzamanlı yük yok); `/explain` sayıları LLM kuyruğuna ve makineye bağlıdır.
+`/score` hedefi (< 1 sn) karşılanıyor. `/explain` süresinin neredeyse tamamı Ollama'dadır (planlayıcı gerekmeyen varsayılan planda bile RAG cevabı 16-50 sn); açıklama adımı 100 sn'yi (soru varsa planlayıcı ayrıca 20 sn'yi) aşarsa `facts` ile `llm_status="timeout"` döner; toplam süre 120 sn'yi geçmez (K-51; önceki bütçe 60 sn idi). Ölçüm küçük ve ardışıktır (eşzamanlı yük yok); `/explain` sayıları LLM kuyruğuna ve makineye bağlıdır.
 
 ## Pipeline ve make hedefleri (K-43)
 `make pipeline` = `profile -> features -> score -> context -> rules` (Adım 1-7), her biri kendi hedefiyle de çalışır. `make rag-index` ayrıdır (Ollama gerekir), `make api` uvicorn'u başlatır (`127.0.0.1:8000`). Eski `index` adımı (var olmayan `scripts/build_index.py`) ve `make index` kaldırıldı; `score` adımı `scripts/run_scoring.py`'yi gerçekten çalıştırır (doğrulandı).
