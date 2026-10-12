@@ -27,7 +27,7 @@ docs/step0.md ... docs/step10.md, reports/ altındaki metrik tabloları, configs
 
 ## README.md
 Kurulum (Python, venv, `make install`), veri indirme ve yerleşimi, Ollama kurulumu ve modeller,
-`make pipeline` (ve `SAMPLE_N` ile hızlı deneme), `make index`, `make api`, örnek curl, testler, klasör yapısı,
+`make pipeline` (ve `SAMPLE_N` ile hızlı deneme), `make rag-index`, `make api`, örnek curl, testler, klasör yapısı,
 dokümana link. Komutların hepsi gerçekten çalıştırılıp doğrulanmış olmalı.
 
 ## Kurallar

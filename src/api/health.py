@@ -10,6 +10,7 @@ import httpx
 
 from src.api.config import ApiSettings
 from src.api.schemas import ComponentHealth, HealthResponse
+from src.core.config import ROOT_DIR
 from src.rag.config import RagSettings
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,9 @@ class HealthService:
         """FAISS index and chunk metadata files (built by `make rag-index`)."""
         directory = self.rag_settings.index_dir
         missing = [f for f in INDEX_FILES if not (directory / f).exists()]
-        detail: dict[str, Any] = {"path": str(directory), "missing": missing}
+        # Repo-relative path: the response must not expose the machine's absolute paths.
+        shown = directory.relative_to(ROOT_DIR) if directory.is_relative_to(ROOT_DIR) else directory
+        detail: dict[str, Any] = {"path": str(shown), "missing": missing}
         return ComponentHealth(ok=not missing, detail=detail)
 
     def ollama(self) -> ComponentHealth:

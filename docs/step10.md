@@ -113,7 +113,7 @@ Container da `SAMPLE_N`'i okur: `SAMPLE_N=50000 make api` örneklem artifact'lar
 
 ## Bilinen sınırlar
 - **Bellek içi store:** entity geçmişi ve cooldown durumu tek süreçte, bellekte. Yeniden başlatınca snapshot'a döner (o ana kadar `/score` ile eklenenler kaybolur). Birden çok worker her biri kendi geçmişini tutar ve tutarsız olur; `make api` tek worker'dır. Gelecek iş: Redis (paylaşımlı, kalıcı store) ve ayrı bir "işlem kaydı" endpoint'i.
-- **Sıra dışı işlem:** geçmişten eski `TransactionDT` skorlanır ama `out_of_order_transaction` uyarısı alır (pencere feature'ları yalnızca eklenme sırasındaki geçmişi görür). Örnek istekler holdout'un gerçek zamanını taşıdığı ve snapshot holdout'u içerdiği için bu uyarıyı verir; üretimde zamanla artan `TransactionDT` beklenir.
+- **Sıra dışı işlem:** geçmişten eski `TransactionDT` skorlanır ama `out_of_order_transaction` uyarısı alır (pencere feature'ları yalnızca eklenme sırasındaki geçmişi görür). Örnek istekler holdout'un gerçek zamanını taşır ve snapshot holdout'u içerir; bu yüzden `block.json` ve `review.json` bu uyarıyı verir (`allow.json` son koşumda vermedi); üretimde zamanla artan `TransactionDT` beklenir.
 - **İdempotency önbelleği sınırlı** (5000 sonuç, 256 tam kayıt, `configs/api.yaml`); önbellekten çıkan bir ID tekrar gelirse yeniden skorlanır ve entity geçmişine ikinci kez eklenir (cooldown deposu kendi ID kümesiyle bunu ayrıca engeller, K-27).
 - `/explain` ve `/rag/query` bloklayan çağrılardır (K-36); LLM zaman aşımında arka plan thread'i HTTP timeout'una kadar yaşar ve Ollama'yı meşgul tutabilir (ardışık istek gecikebilir).
 - Geçersiz kural seti yanıtı yalnızca şema hatalarını gösterir; bilinmeyen feature/param adları şema geçtikten sonra ayrı bir 422 olarak döner.

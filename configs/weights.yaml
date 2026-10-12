@@ -7,7 +7,7 @@ weights:
   temporal: 0.20
 
 rationale:
-  multivariate: "Widest view: joint behaviour of ~65 engineered/C/D features, catches combinations no single column shows."
+  multivariate: "Widest view: joint behaviour of 90 inputs (75 engineered/C/D columns + 15 missingness flags, reports/scores/mv_input.csv), catches combinations no single column shows."
   entity: "Deviation from the card group's own history; strong signal but only available where history exists (shrinkage covers the rest)."
   column: "Single-column tail evidence on a curated explainable subset; simple and readable, but blind to combinations."
   temporal: "Velocity / hour / inter-arrival evidence; narrower scope, kept at the lowest weight together with column."
