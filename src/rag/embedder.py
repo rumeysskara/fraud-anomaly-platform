@@ -32,7 +32,11 @@ class OllamaEmbedder(Embedder):
         return np.vstack(batches).astype("float32")
 
     def _embed_batch(self, texts: list[str]) -> np.ndarray:
-        payload = {"model": self.config.model, "input": texts}
+        payload = {
+            "model": self.config.model,
+            "input": texts,
+            "keep_alive": self.config.keep_alive,
+        }
         try:
             response = self._client.post(
                 "/api/embed", json=payload, timeout=self.config.timeout_seconds

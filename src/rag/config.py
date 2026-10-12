@@ -27,6 +27,7 @@ class EmbeddingConfig(BaseModel):
     model: str
     timeout_seconds: float
     batch_size: int = 16
+    keep_alive: str = "30m"  # how long Ollama keeps the model loaded after a request
 
 
 class LLMConfig(BaseModel):
@@ -39,6 +40,7 @@ class LLMConfig(BaseModel):
     temperature: float = 0.1
     num_ctx: int = 4096
     seed: int = 42
+    keep_alive: str = "30m"  # how long Ollama keeps the model loaded after a request
 
 
 class ChunkingConfig(BaseModel):

@@ -71,12 +71,16 @@ def create_app(container: Container | None = None) -> FastAPI:
 
 
 def _warm_up(container: Container) -> None:
-    """Load models and history now so the first request is fast; failures only log."""
+    """Load models and history now so the first request is fast; failures only log.
+
+    The Ollama models are warmed in a background thread (K-50), so startup does not wait for them.
+    """
     try:
         summary = container.online_scorer().state_summary()
         logger.info("online state loaded: %s", summary)
     except Exception as exc:  # noqa: BLE001 - /health reports it, endpoints answer 503
         logger.error("could not load model artifacts: %s", exc)
+    container.model_warmer().start()
 
 
 app = create_app()

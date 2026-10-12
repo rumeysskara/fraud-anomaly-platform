@@ -14,6 +14,7 @@ from src.api.config import agent_settings_for_api, load_api_settings
 from src.api.health import HealthService
 from src.api.online import OnlineScorer
 from src.api.services import ExplainService, RagQueryService
+from src.api.warmup import ModelWarmer
 from src.context.factory import load_engine
 from src.core.config import CONFIG_DIR, get_sample_n
 from src.features.pipeline import FeaturePipeline
@@ -142,8 +143,15 @@ class Container(containers.DeclarativeContainer):
     explain_service = providers.Singleton(ExplainService, online_scorer, api_coordinator)
     rag_query_service = providers.Singleton(RagQueryService, rag_service, api_settings)
     health_http_client = providers.Singleton(httpx.Client)
+    # K-50: startup warm-up of the Ollama models (background thread; state shown by /health).
+    model_warmer = providers.Singleton(ModelWarmer, embedder, llm_client, api_settings)
     health_service = providers.Singleton(
-        HealthService, online_scorer.provider, rag_settings, api_settings, health_http_client
+        HealthService,
+        online_scorer.provider,
+        rag_settings,
+        api_settings,
+        health_http_client,
+        model_warmer,
     )
 
 

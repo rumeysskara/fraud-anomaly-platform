@@ -10,3 +10,7 @@ health:
   ollama_timeout_seconds: 2
 rag:
   max_k: 10
+warmup:
+  enabled: true              # at startup, one short embedding + chat request in the background (K-50)
+  embedding_text: warm-up
+  llm_prompt: "Yalnızca 'tamam' yaz."

@@ -950,7 +950,7 @@ eğitmez; artifact'lar açılışta yüklenir.
 | `/rules` | GET | Yüklü kurallar | Hayır | Hayır |
 | `/rules/reload` | POST | Kural dosyalarını yeniden yükler; geçersizse 422, eski set geçerli kalır | Hayır | Hayır |
 | `/rag/query` | POST | `question`, `k`, `filters.rule_ids` -> `answer`, `sources`, `abstained`, `grounded`, `llm_status` | Evet | Hayır |
-| `/health` | GET | Model artifact'ları, FAISS indeksi, Ollama durumu (her zaman 200) | Hayır | Hayır |
+| `/health` | GET | Model artifact'ları, FAISS indeksi, Ollama durumu ve açılış ısıtması (`warmup`) (her zaman 200) | Hayır | Hayır |
 
 Zorunlu alanlar: `TransactionID, TransactionDT, TransactionAmt, ProductCD, card1`; eksikse 422. Diğer ham
 alanlar opsiyoneldir, bilinmeyen alan reddedilir. Hatalar tek zarfta döner:

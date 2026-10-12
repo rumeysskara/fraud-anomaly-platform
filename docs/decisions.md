@@ -282,3 +282,8 @@ Kararları geliştirici verir; Claude Code seçenekleri sunar.
 - **Karar (kullanıcı kararı):** `.claude/agents/rag-engineer.md`, `agent-orchestrator.md`, `api-engineer.md` dosya alanları gerçekte yazılan dosyalara göre güncellendi (ör. `configs/rag.yaml`, `artifacts/rag/`, `configs/api.yaml`, `examples/`, Makefile'da yalnızca kendi hedefi).
 - **Alternatifler:** İstisnayı yalnızca burada kaydetmek; dosyaları agent alanlarına geri taşımak (pratik değil).
 - **Neden seçildi:** Kod CLAUDE.md'deki `artifacts/` kuralına eski tanımdan daha uygun; tanım gerçeği yansıtmalı.
+
+### K-50: API açılışında model ısıtma ve keep_alive
+- **Karar (kullanıcı kararı):** API açılışında `ModelWarmer` (`src/api/warmup.py`, container Singleton) arka plan thread'inde embedding modeline ve LLM'e birer kısa istek atar; açılışı bloklamaz, hata yalnızca kaydedilir. Ollama isteklerine `configs/rag.yaml`'dan `keep_alive: 30m` eklenir. `/health` yanıtında `warmup` alanı model başına durumu (`not_started`, `running`, `ok`, `error`, `disabled`) ve süreyi gösterir; bilgi amaçlıdır, `status`'u değiştirmez. `configs/api.yaml` `warmup.enabled` ile kapatılabilir.
+- **Alternatifler:** Açıklama süre payını büyütmek; ısıtmayı açılışı bloklayarak yapmak (açılış onlarca saniye uzar, Ollama yoksa takılır); hiçbir şey yapmamak.
+- **Neden seçildi:** Docs-writer'ın canlı denemesinde ilk `/explain` model yükleme yüzünden 50 sn'lik payı aşmıştı. Isıtma bu maliyeti ilk kullanıcı isteğinden alır; `keep_alive` modellerin bellekte kalmasını sağlar. Sınır: üretim süresini kısaltmaz (ölçüm: ısınmış modelle `explain_review` yine 50,4 sn'de timeout).

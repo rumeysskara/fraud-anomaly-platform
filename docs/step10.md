@@ -27,7 +27,7 @@ Adım 3-9 servisleri tek bir FastAPI uygulamasında toplandı. Endpoint'ler ince
 | `/explain` | POST | Aynı girdi + opsiyonel soru. `facts` (kod) + `narrative` (LLM) + agent trace | Evet (opsiyonel) | Hayır |
 | `/rules/evaluate` | POST | Kural motoru; opsiyonel `rules` alanı yalnızca o istekte kullanılır | Hayır | Hayır (cooldown'u okur) |
 | `/rag/query` | POST | `question`, `k`, `filters.rule_ids` -> `answer`, `sources`, `abstained`, `grounded`, `llm_status` | Evet | Hayır |
-| `/health` | GET | Model artifact'ları, FAISS indeksi, Ollama (her zaman 200) | Hayır | Hayır |
+| `/health` | GET | Model artifact'ları, FAISS indeksi, Ollama ve açılış ısıtması (`warmup`, bilgi amaçlı; `status`'u değiştirmez) (her zaman 200) | Hayır | Hayır |
 | `/rules` | GET | Yüklü kurallar | Hayır | Hayır |
 | `/rules/reload` | POST | Kural dosyalarını yeniden yükler; geçersizse 422 ve eski set geçerli kalır | Hayır | Hayır |
 
@@ -122,6 +122,7 @@ Container da `SAMPLE_N`'i okur: `SAMPLE_N=50000 make api` örneklem artifact'lar
 - `/rules/reload` kural motorunu yeniler, RAG bilgi tabanındaki kural kartlarını yenilemez; açıklamaların güncel kartı kullanması için `make rag-index` tekrar çalıştırılmalıdır.
 - `/rules/reload`, eşzamanlı `/score` istekleriyle aynı kilidi kullanmaz; reload sırasında gelen bir istek eski ya da yeni kural setiyle değerlendirilebilir.
 - Bellek: API açılışı ~1,8 sn, süreç belleği (RSS) ~547 MB (tam veri artifact'ları, Adım 8-10 review ölçümü).
+- **Model ısıtma (K-50):** API açılışında arka plan thread'i embedding ve LLM'e birer kısa istek atar; Ollama isteklerinde `keep_alive: 30m` (`configs/rag.yaml`) vardır. Ölçüm: API 3,7 sn'de açıldı, iki model ~6-12 sn içinde ısındı (embedding ~1,9 sn, LLM ~4,9 sn). Isıtma model yükleme süresini kaldırır ama RAG cevap üretiminin kendisini kısaltmaz: ısınmış modelle `explain_review.json` yine 50,4 sn'de `llm_status="timeout"` döndü.
 
 ## Bir sonraki adımın girdisi (teslim dokümanları)
 docs-writer için kaynaklar: bu dosyadaki endpoint tablosu, örnek istek/yanıtlar ve gecikme ölçümü; `examples/requests/` (curl örnekleri); `configs/api.yaml` (süre sınırı, önbellek boyutları); make hedefleri (`make pipeline`, `make rag-index`, `make api`). README'de API'nin artifact'lar üretildikten sonra başlatıldığı açıkça yazılmalıdır.

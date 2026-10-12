@@ -332,9 +332,13 @@ class ComponentHealth(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """ok: all ready; degraded: /score works, LLM side not ready; down: models not loaded."""
+    """ok: all ready; degraded: /score works, LLM side not ready; down: models not loaded.
+
+    warmup is informational (state of the startup warm-up, K-50) and does not change status.
+    """
 
     status: Literal["ok", "degraded", "down"]
     model_artifacts: ComponentHealth
     faiss_index: ComponentHealth
     ollama: ComponentHealth
+    warmup: ComponentHealth

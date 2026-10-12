@@ -54,6 +54,14 @@ class RagApiSettings(BaseModel):
     max_k: int = Field(default=10, ge=1)
 
 
+class WarmupSettings(BaseModel):
+    """Background warm-up of the Ollama models at startup (K-50)."""
+
+    enabled: bool = True
+    embedding_text: str = "warm-up"
+    llm_prompt: str = "Yalnızca 'tamam' yaz."
+
+
 class ApiSettings(BaseModel):
     """Whole configs/api.yaml."""
 
@@ -61,6 +69,7 @@ class ApiSettings(BaseModel):
     online: OnlineSettings = Field(default_factory=OnlineSettings)
     health: HealthSettings = Field(default_factory=HealthSettings)
     rag: RagApiSettings = Field(default_factory=RagApiSettings)
+    warmup: WarmupSettings = Field(default_factory=WarmupSettings)
 
 
 def load_api_settings(config_dir: Path = CONFIG_DIR) -> ApiSettings:

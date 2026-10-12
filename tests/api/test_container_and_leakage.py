@@ -97,5 +97,7 @@ def test_health_index_path_is_repo_relative(world: World) -> None:
     from src.api.health import HealthService
     from src.rag.config import load_rag_settings
 
-    service = HealthService(lambda: world.scorer, load_rag_settings(), world.api_settings, None)  # type: ignore[arg-type]
+    service = HealthService(
+        lambda: world.scorer, load_rag_settings(), world.api_settings, None, world.warmer  # type: ignore[arg-type]
+    )  # type: ignore[arg-type]
     assert not service.index().detail["path"].startswith("/")

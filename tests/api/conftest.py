@@ -21,9 +21,10 @@ from src.api.health import HealthService
 from src.api.main import create_app
 from src.api.online import OnlineScorer
 from src.api.services import ExplainService, RagQueryService
+from src.api.warmup import ModelWarmer
 from src.container import Container
 from src.core.config import CONFIG_DIR
-from src.core.interfaces import ContextAdjuster, LLMClient
+from src.core.interfaces import ContextAdjuster, Embedder, LLMClient
 from src.core.types import AdjustedResult, Explanation, ScoreResult
 from src.rag.config import load_rag_settings
 from src.rag.errors import EmbeddingUnavailableError, LLMUnavailableError
@@ -210,6 +211,36 @@ class FakeRAG:
         )
 
 
+class WarmEmbedder(Embedder):
+    """Embedder for the startup warm-up; records calls, can fail or be slow."""
+
+    def __init__(self, fail: bool = False, delay: float = 0.0) -> None:
+        self.fail, self.delay = fail, delay
+        self.calls: list[list[str]] = []
+
+    def embed(self, texts: list[str]) -> Any:
+        self.calls.append(texts)
+        if self.delay:
+            time.sleep(self.delay)
+        if self.fail:
+            raise EmbeddingUnavailableError("embedding down")
+        return [[0.0]]
+
+
+class WarmLLM(LLMClient):
+    """LLM for the startup warm-up; records calls, can fail."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.fail = fail
+        self.calls: list[str] = []
+
+    def generate(self, prompt: str, context: str = "") -> str:
+        self.calls.append(prompt)
+        if self.fail:
+            raise LLMUnavailableError("llm down")
+        return "tamam"
+
+
 class NoPlanLLM(LLMClient):
     """Planner LLM that is down (the planner then uses the default plan)."""
 
@@ -257,6 +288,7 @@ class World:
         self.coordinator = factory.create_system()
         self.explain_service = ExplainService(self.scorer, self.coordinator)
         self.rag_service = RagQueryService(self.rag, self.api_settings)  # type: ignore[arg-type]
+        self.warmer = ModelWarmer(WarmEmbedder(), WarmLLM(), self.api_settings)
 
 
 @pytest.fixture
@@ -280,12 +312,14 @@ def make_client(world: World, ollama: httpx.Client | None = None) -> Iterator[Te
     )
     client = ollama or httpx.Client(transport=transport)
     container.health_http_client.override(client)
+    container.model_warmer.override(world.warmer)
     container.health_service.override(
         HealthService(
             lambda: world.scorer,
             load_rag_settings(CONFIG_DIR),
             world.api_settings,
             client,
+            world.warmer,
         )
     )
     app = create_app(container)

@@ -48,6 +48,7 @@ class OllamaLLMClient(LLMClient):
             "model": model,
             "messages": messages,
             "stream": False,
+            "keep_alive": self.config.keep_alive,
             "options": {
                 "temperature": self.config.temperature,
                 "num_ctx": self.config.num_ctx,

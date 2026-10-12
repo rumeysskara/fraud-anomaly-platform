@@ -10,6 +10,7 @@ import httpx
 
 from src.api.config import ApiSettings
 from src.api.schemas import ComponentHealth, HealthResponse
+from src.api.warmup import ModelWarmer
 from src.core.config import ROOT_DIR
 from src.rag.config import RagSettings
 
@@ -31,11 +32,13 @@ class HealthService:
         rag_settings: RagSettings,
         api_settings: ApiSettings,
         http_client: httpx.Client,
+        warmer: ModelWarmer,
     ) -> None:
         self._load_models = load_models
         self.rag_settings = rag_settings
         self.api_settings = api_settings
         self.http = http_client
+        self.warmer = warmer
 
     def models(self) -> ComponentHealth:
         """Feature pipeline, anomaly layers, context engine and rule engine (OnlineScorer)."""
@@ -70,8 +73,12 @@ class HealthService:
         present = {m: any(n == m or n.startswith(f"{m}:") for n in installed) for m in needed}
         return ComponentHealth(ok=all(present.values()), detail={"host": host, "models": present})
 
+    def warmup(self) -> ComponentHealth:
+        """State of the startup warm-up per model (informational; does not change status)."""
+        return ComponentHealth(ok=self.warmer.ready(), detail=self.warmer.state())
+
     def check(self) -> HealthResponse:
-        """Run all three checks."""
+        """Run the three dependency checks and add the warm-up state."""
         models, index, ollama = self.models(), self.index(), self.ollama()
         if not models.ok:
             status = "down"
@@ -80,5 +87,9 @@ class HealthService:
         else:
             status = "degraded"
         return HealthResponse(
-            status=status, model_artifacts=models, faiss_index=index, ollama=ollama
+            status=status,
+            model_artifacts=models,
+            faiss_index=index,
+            ollama=ollama,
+            warmup=self.warmup(),
         )

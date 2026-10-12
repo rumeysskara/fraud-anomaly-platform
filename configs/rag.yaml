@@ -15,6 +15,7 @@ embedding:
   model: bge-m3
   timeout_seconds: 60
   batch_size: 16
+  keep_alive: 30m              # Ollama keeps the model loaded this long after a request (K-50)
 
 llm:
   host: http://localhost:11434
@@ -23,6 +24,7 @@ llm:
   timeout_seconds: 180
   temperature: 0.0
   num_ctx: 8192
+  keep_alive: 30m                # Ollama keeps the model loaded this long after a request (K-50)
 
 chunking:
   # Safety cap only (K-30): a section is split at structure boundaries (paragraph / list item)
