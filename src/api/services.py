@@ -41,12 +41,15 @@ class ExplainService:
     def explain(self, txn: dict[str, Any], question: str | None) -> ExplainResponse:
         """Facts + optional narrative + trace for one transaction."""
         started = time.perf_counter()
-        record, outcome = self.scorer.analyze(txn)
+        _, outcome = self.scorer.analyze(txn)
         facts = to_facts(outcome, self.scorer.thresholds())
         response: AgentResponse | None = None
         error: str | None = None
         try:
-            response = self.coordinator.analyze(AnalystRequest(record=record, question=question))
+            # the raw transaction goes to the agents: the AnomalyAgent asks the FeatureAgent for
+            # the record (K-54), which reads the same record as `analyze` above (record_for)
+            request = AnalystRequest(transaction=dict(txn), question=question)
+            response = self.coordinator.analyze(request)
         except Exception as exc:  # noqa: BLE001 - the facts must still be returned
             logger.warning("agent flow failed: %s", exc)
             error = f"{type(exc).__name__}: {exc}"

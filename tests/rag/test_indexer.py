@@ -19,6 +19,7 @@ DOC_TYPES = {
     "typology",
     "feature_dictionary",
     "operations",
+    "policy",
 }
 
 

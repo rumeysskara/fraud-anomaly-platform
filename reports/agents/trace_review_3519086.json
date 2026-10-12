@@ -1,6 +1,6 @@
 {
   "question": "TransactionID 3519086 işlemini incele ve bir inceleme notu yaz.",
-  "correlation_id": "0bdfc1c28f5c40b0af14d9ae29b9fa8e",
+  "correlation_id": "47507bbb181a4de2848ec8b4b59299fd",
   "transaction_id": 3519086,
   "status": "ok",
   "decision": "review",
@@ -26,8 +26,26 @@
     "label": "destek bilgisi",
     "affects_decision": false,
     "origin": "rag",
-    "text": "Review kararı verildiğinde skor eşiği 1,070'den büyük olmalıdır. Anomali katmanlarından entity ve column anlamları:\n\n- Entity: Cihaz geçmişine bakılır.\n- Column: Sütunların alışılmadık bir kombinasyonu vardır.\n\nOperasyon rehberindeki review adımları:\n\n1. Tetiklenen kuralları ve önem derecelerini sırala; high önemdeki kural (R03, R04, R05) medium veya low olandan (R06-R09, R11, R12) önce incelenir.\n2. Tek bir zayıf kural tetiklenmişse, kuralların bilinen sınırlarını hatırlayın: bu kurallar geniş kapsamlı ve ayrım gücü zayıftır, tek başlarına güçlü kanıt değildir.\n3. Entity geçmişine bak: önceki işlem sayısı, kart yaşı, bilinen cihaz ve e-posta.\n4. Karar ver: serbest bırak, ek doğrulama iste veya block'a yükselt. Gerekçeyi vakaya yaz.\n\nKaynaklar: [feature_dictionary#skor-alanlari] [operations_guide#review-karari-manuel-inceleme]",
+    "text": "Anomali skoru inceleme eşiği aştığı için review kararı verildiğinde, skor 1.070 eşiğinin üzerinde olmalıdır. Anomali katmanlarından entity ve column, dört anomali katmanının (multivariate, entity, column, temporal) ağırlıklı ortalamasının fit kuantil tablosuyla [0,1]'e normalleştirilmiş hali olarak tanımlanır.\n\nOperasyon rehberindeki review adımları:\n1. Tetiklenen kuralları ve önem derecelerini sırala; high önemdeki kural (R03, R04, R05) medium veya low olandan (R06-R09, R07, R08, R11, R12) önce incelenir.\n2. Tek bir zayıf kural tetiklenmişse, kuralların bilinen sınırlarını hatırlayarak analiz et.\n3. Entity geçmişine bak: önceki işlem sayısı, kart yaşı, bilinen cihaz ve e-posta.\n4. Serbest bırak, ek doğrulama iste veya block'a yükselt karar verirken gerekçeyi belirt.\n\nKaynaklar: [feature_dictionary#skor-alanlari] [operations_guide#review-karari-manuel-",
     "sources": [
+      {
+        "chunk_id": "fraud_policy#manuel-inceleme-review-ilkeleri",
+        "heading": "Örnek Fraud Politikası > Manuel inceleme (review) ilkeleri",
+        "doc_type": "policy",
+        "rule_ids": [
+          "R03",
+          "R04",
+          "R05",
+          "R06",
+          "R07",
+          "R08",
+          "R09",
+          "R11",
+          "R12"
+        ],
+        "score": 0.6704,
+        "retrieval": "semantic"
+      },
       {
         "chunk_id": "feature_dictionary#skor-alanlari",
         "heading": "Feature Sözlüğü > Skor alanları",
@@ -67,19 +85,10 @@
         ],
         "score": 0.6351,
         "retrieval": "semantic"
-      },
-      {
-        "chunk_id": "operations_guide#operasyon-rehberi-analist",
-        "heading": "Operasyon Rehberi (Analist)",
-        "doc_type": "operations",
-        "rule_ids": [],
-        "score": 0.5873,
-        "retrieval": "semantic"
       }
     ],
     "cited_ids": [
-      "feature_dictionary#skor-alanlari",
-      "operations_guide#review-karari-manuel-inceleme"
+      "feature_dictionary#skor-alanlari"
     ],
     "grounded": true,
     "abstained": false,
@@ -93,88 +102,92 @@
       "explainer:explain"
     ],
     "fallback_reason": null,
-    "duration_ms": 4563.18
+    "duration_ms": 10619.25
   },
   "errors": [],
-  "total_ms": 40690.86,
+  "total_ms": 106961.29,
   "trace": [
     {
       "seq": 1,
-      "message_id": "eb2334773b4d4758ab91cd79ca63bd92",
+      "message_id": "b7f771f0c2bb46f792eef1ad95341fd4",
       "parent_id": null,
       "sender": "client",
       "recipient": "coordinator",
       "intent": "analyze",
       "status": "ok",
-      "duration_ms": 40691.23,
-      "timestamp": "2026-10-12T05:08:29.321089Z",
+      "duration_ms": 106961.45,
+      "timestamp": "2026-10-12T10:01:05.537055Z",
       "payload_keys": [
         "question",
-        "record"
+        "record",
+        "transaction"
       ],
       "detail": null
     },
     {
       "seq": 2,
-      "message_id": "4843148e4e9f45a69c96ae7fc814a1ac",
-      "parent_id": "eb2334773b4d4758ab91cd79ca63bd92",
+      "message_id": "3f9a10bcb65b43138daa5beb4ba1022a",
+      "parent_id": "b7f771f0c2bb46f792eef1ad95341fd4",
       "sender": "coordinator",
       "recipient": "rule",
       "intent": "evaluate",
       "status": "ok",
-      "duration_ms": 130.32,
-      "timestamp": "2026-10-12T05:08:33.884549Z",
+      "duration_ms": 178.09,
+      "timestamp": "2026-10-12T10:01:16.157284Z",
       "payload_keys": [
         "adjusted_score",
         "adjusted_score_unclipped",
         "anomaly_score",
         "layer_scores",
-        "record"
+        "record",
+        "transaction"
       ],
       "detail": null
     },
     {
       "seq": 3,
-      "message_id": "38d08860823a4b048544ed8d1d20206d",
-      "parent_id": "4843148e4e9f45a69c96ae7fc814a1ac",
+      "message_id": "d4448c9a0efa4a8986da38a126be6ba2",
+      "parent_id": "3f9a10bcb65b43138daa5beb4ba1022a",
       "sender": "rule",
       "recipient": "context",
       "intent": "adjust",
       "status": "ok",
-      "duration_ms": 120.11,
-      "timestamp": "2026-10-12T05:08:33.884865Z",
+      "duration_ms": 159.02,
+      "timestamp": "2026-10-12T10:01:16.157754Z",
       "payload_keys": [
         "anomaly_score",
         "layer_scores",
-        "record"
+        "record",
+        "transaction"
       ],
       "detail": null
     },
     {
       "seq": 4,
-      "message_id": "cc7d3d375d2a46089ef0952be2baa75c",
-      "parent_id": "38d08860823a4b048544ed8d1d20206d",
+      "message_id": "db8c4058ef194bd8a8eacdebddd23712",
+      "parent_id": "d4448c9a0efa4a8986da38a126be6ba2",
       "sender": "context",
       "recipient": "anomaly",
       "intent": "score",
       "status": "ok",
-      "duration_ms": 111.0,
-      "timestamp": "2026-10-12T05:08:33.885125Z",
+      "duration_ms": 143.59,
+      "timestamp": "2026-10-12T10:01:16.158130Z",
       "payload_keys": [
-        "record"
+        "record",
+        "transaction"
       ],
       "detail": null
     },
     {
       "seq": 5,
-      "message_id": "31079b992f9d4baa9d89318c8877a0e7",
-      "parent_id": "eb2334773b4d4758ab91cd79ca63bd92",
+      "message_id": "8a07889a07a34fc8a255bb3b94e737ed",
+      "parent_id": "b7f771f0c2bb46f792eef1ad95341fd4",
       "sender": "coordinator",
       "recipient": "explainer",
       "intent": "explain",
       "status": "ok",
-      "duration_ms": 35996.48,
-      "timestamp": "2026-10-12T05:08:34.014947Z",
+      "duration_ms": 96162.55,
+      "timestamp": "2026-10-12T10:01:16.335497Z",
       "payload_keys": [
         "context_rules",
         "layer_scores",

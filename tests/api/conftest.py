@@ -284,6 +284,7 @@ class World:
             self.engine,
             lambda: self.rag,  # type: ignore[arg-type,return-value]
             Planner(NoPlanLLM(), agents),
+            records=lambda: self.scorer,  # same wiring as the container (K-54)
         )
         self.coordinator = factory.create_system()
         self.explain_service = ExplainService(self.scorer, self.coordinator)

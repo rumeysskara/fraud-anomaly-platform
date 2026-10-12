@@ -95,6 +95,13 @@ class Container(containers.DeclarativeContainer):
         ungrounded_warning=rag_settings.provided.prompt.ungrounded_warning,
     )
 
+    # Step 10: API settings and the online scorer (raw transaction -> record -> decision). Defined
+    # before the agents because the Step 9 FeatureAgent reads records through it (K-54).
+    api_settings = providers.Singleton(load_api_settings, CONFIG_DIR)
+    online_scorer = providers.Singleton(
+        OnlineScorer, feature_pipeline, scoring_service, context_adjuster, rule_engine, api_settings
+    )
+
     # Step 9: runtime agents (configs/agents.yaml). The bus is the Mediator; AgentFactory builds
     # the agents from the services above (override any of them with a mock in tests).
     agents_settings = providers.Singleton(load_agent_settings, CONFIG_DIR)
@@ -112,17 +119,14 @@ class Container(containers.DeclarativeContainer):
         rule_engine,
         rag_service.provider,
         planner,
+        records=online_scorer.provider,  # FeatureAgent (K-54); resolved only when it runs
     )
     coordinator = providers.Singleton(create_coordinator, agent_factory)
 
-    # Step 10: API. `online_scorer` holds the online entity history (loaded from artifacts/, one
-    # process, in memory). The API agent flow is a second, separate bus + agents built from the
-    # same services with the API's LLM deadline (configs/api.yaml, default 60 s); the Step 9
-    # `coordinator` above stays unchanged for scripts and demos.
-    api_settings = providers.Singleton(load_api_settings, CONFIG_DIR)
-    online_scorer = providers.Singleton(
-        OnlineScorer, feature_pipeline, scoring_service, context_adjuster, rule_engine, api_settings
-    )
+    # Step 10: API. `online_scorer` (above) holds the online entity history (loaded from
+    # artifacts/, one process, in memory). The API agent flow is a second, separate bus + agents
+    # built from the same services with the API's LLM deadline (configs/api.yaml); the Step 9
+    # `coordinator` above is used by scripts and demos.
     api_agents_settings = providers.Singleton(agent_settings_for_api, agents_settings, api_settings)
     api_message_bus = providers.Singleton(MessageBus, agents_settings.provided.bus.max_depth)
     api_planner_llm = providers.Singleton(
@@ -138,6 +142,7 @@ class Container(containers.DeclarativeContainer):
         rule_engine,
         rag_service.provider,
         api_planner,
+        records=online_scorer.provider,
     )
     api_coordinator = providers.Singleton(create_coordinator, api_agent_factory)
     explain_service = providers.Singleton(ExplainService, online_scorer, api_coordinator)

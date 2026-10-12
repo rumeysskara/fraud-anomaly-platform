@@ -23,12 +23,12 @@ soru (+ kural motoru explain çıktısı) ─> HybridRetriever ─> PromptBuilde
 |---|---|---|
 | Embedding | `bge-m3` (Ollama) | Yerel ve ücretsiz; çok dilli retrieval için eğitilmiş, Türkçeyi destekliyor; ~1,2 GB |
 | LLM | `qwen2.5:7b` (Ollama), temperature 0 (K-33) | Yerel; Türkçe konuşabiliyor; 4-bit ~4,7 GB ile 16 GB RAM'e sığıyor. Yedek ad `qwen2.5:3b` yalnızca config'te durur, birincil model kurulu değilse denenir (bu makinede kurulu değil, denenmedi) |
-| Vector store | FAISS `IndexFlatIP`, L2-normalize vektörler (= kosinüs) | Yerel; KB 52 chunk olduğu için kesin (flat) arama yeterli; seed 42 |
+| Vector store | FAISS `IndexFlatIP`, L2-normalize vektörler (= kosinüs) | Yerel; KB 60 chunk olduğu için kesin (flat) arama yeterli; seed 42 |
 
 Model karşılaştırması yapılmadı (kullanıcı kararı). Başka bir embedding veya LLM denenmedi; "bge-m3 en iyisi" iddiası yoktur, yalnızca gerekçeli bir seçimdir.
 
 ## Bilgi tabanı (K-29)
-52 chunk, 5 belge türü:
+60 chunk, 6 belge türü (ilk sürümde 52 chunk / 5 tür; `fraud_policy.md` sonradan eklendi, K-53):
 
 | Belge | Üretim | Chunk | Bölümler |
 |---|---|---|---|
@@ -37,6 +37,7 @@ Model karşılaştırması yapılmadı (kullanıcı kararı). Başka bir embeddi
 | `knowledge_base/typologies.md` | elle | 7 | card testing, velocity/burst, hesap ele geçirme, yeni kart riski, yabancı ülke/adres uyuşmazlığı, gece işlemleri (+ giriş); her biri "İlgili kurallar:" satırıyla kural ID'lerine bağlı |
 | `knowledge_base/feature_dictionary.md` | elle | 7 | tutar, entity geçmişi/velocity, kart/cihaz, coğrafya/e-posta, zaman, skor alanları |
 | `knowledge_base/operations_guide.md` | elle | 10 | karar türleri, block, review, skor kaynaklı review, allow, kural bazlı ilk kontroller (3 bölüm), yanlış pozitif geri bildirimi |
+| `knowledge_base/fraud_policy.md` (`doc_type: policy`) | elle | 8 | ÖRNEK politika (gerçek kurum politikası değil): amaç/kapsam, block, review, allow/güvenilir müşteri, context düzeltmeleri, açıklanabilirlik ve LLM'in rolü, veri ve değişiklik yönetimi (+ giriş); mevcut kurallara dayanır, yeni eşik içermez |
 
 **Kural kartı içeriği:** kural ID, ad, karar, öncelik, önem, risk artışı, bayrak, etiketler, cooldown (varsa) tablosu; koşulun düz Türkçe madde madde yazımı (öğrenilmiş eşiklerin gerçek değeriyle, örn. "441,95 (fit TransactionAmt q95)"); config açıklaması; gerekçe; bilinen sınırlar. Üretilen dosyalar `<!-- AUTO-GENERATED -->` yorumu ve görünür "otomatik üretildi, elle düzenlemeyin" notu taşır. Kural değişince `make rag-index` kartı yeniden üretir; testte (`test_card_follows_a_changed_rule`) bir kuralın boost'u ve koşulu değiştirilip R12 silinir, kartın buna uyduğu doğrulanır.
 
@@ -92,7 +93,7 @@ Dağılımlar örtüşüyor: en düşük KB-içi skor (0,533, kısa ve İngilizc
 | Ölçüt (eşik 0,45) | Değer |
 |---|---|
 | Doğru abstain (eşik, LLM'siz) | 1/3 = 0,33 |
-| Yanlış abstain (KB-içi soruyu reddetme) | 0/10 = 0,00 |
+| Yanlış abstain (KB-içi soruyu reddetme) | 0/10 = 0,00 (politika eklendikten sonra 0/12) |
 | Uçtan uca doğru abstain (eşik + LLM'in kendi "bilgi yok" cevabı, gerçek model) | 3/3 |
 
 Uçtan uca: Türkiye sorusu eşikte (LLM çağrılmadı, 0,2 sn); faiz oranı ve holdout yakalama oranı soruları eşiği geçti, `qwen2.5:7b` "Bilgi tabanında bu konuda bilgi yok" dedi (`abstained=true`). Her ikisinde model ayrıca ilgisiz kaynak id'leri eklemişti; servis bunları siler.
@@ -129,17 +130,19 @@ Uçtan uca: Türkiye sorusu eşikte (LLM çağrılmadı, 0,2 sn); faiz oranı ve
 - Örnek 2 ve 3: `grounded=true`, içerik bağlamla uyumlu; ikinci örnekte ("neden riskli") modelin "entity'nin geçmiş hareketleri daha az etkilidir" cümlesi KB'de yoktur (hafif uydurma), kaynak kontrolü bunu yakalayamaz.
 
 ## Retrieval doğruluğu: hit@k (gerçek indeks)
-`tests/rag/retrieval_questions.yaml`: 10 soru, her biri için beklenen bir kural ID'si ve/veya belge türü (veya tek bir chunk id). Sorular sonuçlar görülmeden yazıldı ve sonuçlara bakılarak değiştirilmedi. Arama saf semantiktir (filtresiz, metadata kotası kapalı). Test: `pytest -m ollama -s` (indeks `artifacts/rag/` yoksa veya Ollama kapalıysa atlanır; varsayılan `make test` içinde koşmaz). Eşik (hit@5 >= 0,7) ilk çalıştırmadan önce belirlendi.
+`tests/rag/retrieval_questions.yaml`: 12 soru (ilk sürümde 10), her biri için beklenen bir kural ID'si ve/veya belge türü (veya tek bir chunk id). Sorular sonuçlar görülmeden yazıldı ve sonuçlara bakılarak değiştirilmedi. Arama saf semantiktir (filtresiz, metadata kotası kapalı). Test: `pytest -m ollama -s` (indeks `artifacts/rag/` yoksa veya Ollama kapalıysa atlanır; varsayılan `make test` içinde koşmaz). Eşik (hit@5 >= 0,7) ilk çalıştırmadan önce belirlendi.
 
-| k | hit@k |
-|---|---|
-| 1 | 0,80 (8/10, yalnızca KB-içi 10 soru) |
-| 3 | 1,00 (10/10) |
-| 5 | 1,00 (10/10) |
+| k | İlk sürüm (52 chunk, 10 soru) | `fraud_policy.md` sonrası (60 chunk, 12 soru) |
+|---|---|---|
+| 1 | 0,80 (8/10) | 0,83 (10/12) |
+| 3 | 1,00 (10/10) | 0,92 (11/12) |
+| 5 | 1,00 (10/10) | 1,00 (12/12) |
 
 Doğru/yanlış abstain oranları yukarıda (eşik tablosu). hit@1 kaçıran iki soru: "Kart testi şüphesi hangi koşulda tetiklenir?" (beklenen R01 kartı 3. sırada; önce `typologies#card-testing-kart-testi` ve operasyon rehberi geldi) ve "Velocity patlaması kuralı aynı entity için neden bir saatte en fazla bir kez tetiklenir?" (R03 kartı 2. sırada; önce `typologies#velocity-burst-hiz-ve-patlama` geldi). İkisinde de ilk gelen chunk konu olarak ilgili (tipoloji); beklenen kural kartı daha aşağıda kaldı. Ölçüt kural kartını beklediği için bunlar kaçırma sayıldı. Hibrit modda (tetiklenen kural ID'si verilince) R01/R03 kartı kotayla zaten en öne alınır.
 
-Yorum sınırı: 10 soru küçük bir örnektir ve soruları bilgi tabanını yazan geliştirici hazırladı; bu yüzden hit@k iyimser bir tahmindir. Bağımsız bir soru kümesiyle ölçülmedi. Sorgu yeniden yazma, reranker ve çok-chunk cevaplar ölçülmedi.
+**`fraud_policy.md` sonrası (K-53):** iki yeni soru (`doc_type: policy`) sonuçlar görülmeden eklendi; ikisi de 1. sırada. Kart testi sorusunda R01 kartı 3. sıradan 5. sıraya düştü (araya `fraud_policy#manuel-inceleme-review-ilkeleri` ve `fraud_policy#gecirme-allow-ve-guvenilir-musteri-ilkeleri` girdi); hit@3 bu yüzden 1,00'dan 0,92'ye indi. Politika belgesi kural kimliklerini "İlgili kurallar:" satırında taşıdığı için konu olarak yakındır. Hibrit modda R01 kartı yine kotayla öne alınır. Sorular ve eşik (hit@5 >= 0,7) değiştirilmedi; KB-dışı 3 soru yine eşikte veya LLM'de reddedilir (eşikle doğru abstain 1/3, yanlış abstain 0/12).
+
+Yorum sınırı: 12 soru küçük bir örnektir ve soruları bilgi tabanını yazan geliştirici hazırladı; bu yüzden hit@k iyimser bir tahmindir. Bağımsız bir soru kümesiyle ölçülmedi. Sorgu yeniden yazma, reranker ve çok-chunk cevaplar ölçülmedi.
 
 ## Çıktılar
 | Yol | İçerik |
@@ -161,9 +164,9 @@ Container (yalnızca ekleme): `rag_settings`, `embedder`, `llm_client`, `vector_
 ## Bilinen sınırlar
 - **LLM güvenilirliği (ek turda azaltıldı, çözülmedi):** abstain eşiği ve kaynak kontrolü uydurmayı ve KB-dışı soruları azaltır, içerik doğruluğunu garanti etmez. 7B yerel model talimatı her zaman izlemiyor: bağlam dışı ifade uydurdu (örnek 1) ve bilgi olmayan soruda "bilgi yok" demek yerine ilgisiz bir sayı verdi (örnek 4). Kaynak id'leri her çalıştırmada yazıldı, ama bir id'nin yazılması cevabın doğru olduğunu göstermez (`cited_ids` yalnızca metinde geçen id'leri listeler, içerik doğrulaması yapmaz). Cevap otomasyonu için kullanılmamalıdır.
 - **Gecikme:** cevap başına 16-34 sn (7B model, CPU/Apple Silicon, ilk çağrıda model yükleme dahil). API'de zaman aşımı ve eşzamanlılık Adım 10'da ele alınmalı.
-- **Bilgi tabanı ölçeği ve dili:** 52 chunk, tek dil (Türkçe). Kural config'indeki `description` alanı İngilizcedir ve kartlarda "(config, İngilizce)" olarak yer alır.
+- **Bilgi tabanı ölçeği ve dili:** 60 chunk, tek dil (Türkçe). Kural config'indeki `description` alanı İngilizcedir ve kartlarda "(config, İngilizce)" olarak yer alır.
 - **`rule_notes.yaml` elle bakım:** kart gövdesi config'ten otomatik üretilir, ama gerekçe ve sınır sayıları elle girilir; `step7.md` yeniden hesaplanırsa güncellenmelidir. Çok sayıda sayı (precision/lift) holdout'a ve post-hoc incelemeye dayanır (K-24, K-25).
-- **Hit@k küçük ve yanlı:** 10 soru, soruları KB yazarı hazırladı.
+- **Hit@k küçük ve yanlı:** 12 soru, soruları KB yazarı hazırladı.
 - **Hibrit sıralama basit:** kota tabanlı; RRF veya reranker denenmedi. Aynı kuralı hem tipoloji hem kart anlattığında sıra konu benzerliğine bağlı.
 - **Retry yok;** Ollama geçici hatasında tek deneme yapılır.
 - **Yedek model denenmedi:** `qwen2.5:3b` bu makinede kurulu değil; yedek yolu yalnızca sahte HTTP ile testlidir.

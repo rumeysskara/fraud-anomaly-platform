@@ -13,10 +13,11 @@ from src.agents.config import AgentSettings
 from src.agents.context_agent import ContextAgent
 from src.agents.coordinator import CoordinatorAgent
 from src.agents.explainer_agent import ExplainerAgent
-from src.agents.messages import ANOMALY, CONTEXT, COORDINATOR, EXPLAINER, RULE
+from src.agents.feature_agent import FeatureAgent
+from src.agents.messages import ANOMALY, CONTEXT, COORDINATOR, EXPLAINER, FEATURE, RULE
 from src.agents.planner import Planner
 from src.agents.rule_agent import RuleAgent
-from src.core.interfaces import ContextAdjuster
+from src.core.interfaces import ContextAdjuster, RecordSource
 from src.rag.config import LLMConfig
 from src.rag.llm import OllamaLLMClient
 from src.rag.service import RAGService
@@ -28,7 +29,9 @@ class AgentFactory:
     """Creates agents by role name. Services are injected; nothing is built from globals.
 
     `rag` is a provider (e.g. `Container.rag_service.provider`): the RAG service, and with it the
-    FAISS index, is resolved only when the ExplainerAgent runs.
+    FAISS index, is resolved only when the ExplainerAgent runs. `records` (optional provider,
+    e.g. `Container.online_scorer.provider`) enables the FeatureAgent; without it callers must send
+    ready records.
     """
 
     def __init__(
@@ -40,6 +43,7 @@ class AgentFactory:
         rule_engine: RuleEngine,
         rag: Callable[[], RAGService],
         planner: Planner,
+        records: Callable[[], RecordSource] | None = None,
     ) -> None:
         self.bus = bus
         self.settings = settings
@@ -48,6 +52,7 @@ class AgentFactory:
         self.rule_engine = rule_engine
         self.rag = rag
         self.planner = planner
+        self.records = records
 
     def create(self, role: str) -> Agent:
         """Build one agent (not registered)."""
@@ -59,6 +64,10 @@ class AgentFactory:
             return RuleAgent(self.bus, self.rule_engine, self.settings.rule.update_state)
         if role == EXPLAINER:
             return ExplainerAgent(self.bus, self.rag, self.settings.explainer)
+        if role == FEATURE:
+            if self.records is None:
+                raise ValueError("the feature agent needs a record source")
+            return FeatureAgent(self.bus, self.records)
         if role == COORDINATOR:
             return CoordinatorAgent(self.bus, self.planner)
         raise ValueError(f"unknown agent role '{role}'")
@@ -66,7 +75,10 @@ class AgentFactory:
     def create_system(self) -> CoordinatorAgent:
         """Build every agent, register them on the bus and return the coordinator."""
         coordinator: CoordinatorAgent | None = None
-        for role in (ANOMALY, CONTEXT, RULE, EXPLAINER, COORDINATOR):
+        roles = [ANOMALY, CONTEXT, RULE, EXPLAINER, COORDINATOR]
+        if self.records is not None:
+            roles.insert(0, FEATURE)
+        for role in roles:
             agent = self.create(role)
             self.bus.register(agent)
             if isinstance(agent, CoordinatorAgent):

@@ -78,7 +78,7 @@ flowchart TB
     subgraph AG["agents - src/agents"]
         CO["CoordinatorAgent"]
         BUS["MessageBus (Mediator)"]
-        WA["AnomalyAgent, ContextAgent, RuleAgent, ExplainerAgent"]
+        WA["FeatureAgent, AnomalyAgent, ContextAgent, RuleAgent, ExplainerAgent"]
     end
     subgraph DOM["alan servisleri"]
         RAG["rag - src/rag: HybridRetriever, RAGService, FAISS"]
@@ -151,16 +151,22 @@ sequenceDiagram
     participant K as CoordinatorAgent
     participant P as Planner
     participant A as AnomalyAgent
+    participant F as FeatureAgent
     participant X as ContextAgent
     participant R as RuleAgent
     participant E as ExplainerAgent
-    C->>B: analyze(record, question?)
+    C->>B: analyze(record veya ham transaction, question?)
     B->>K: analyze
     K->>P: plan(question)
     P-->>K: varsayılan plan veya doğrulanmış LLM planı
     K->>B: score
     B->>A: score
-    A-->>K: anomaly_score, layer_scores
+    opt ham işlem (/explain): kayıt yok
+        A->>B: featurize (delegation)
+        B->>F: featurize
+        F-->>A: kayıt (FeaturePipeline.transform_one + ham alanlar)
+    end
+    A-->>K: anomaly_score, layer_scores (+ üretilen kayıt)
     K->>B: adjust
     B->>X: adjust
     X-->>K: adjusted_score, uygulanan C kuralları
@@ -174,7 +180,8 @@ sequenceDiagram
 ```
 
 LLM planı `anomaly` ve `context` adımlarını atlarsa RuleAgent eksik skoru bus üzerinden ContextAgent'tan,
-ContextAgent da AnomalyAgent'tan ister (delegation; [Bölüm 11](#11-agent-orkestrasyonu-adım-9)).
+ContextAgent da AnomalyAgent'tan ister; AnomalyAgent ham işlem aldıysa kaydı FeatureAgent'tan ister
+(delegation; [Bölüm 11](#11-agent-orkestrasyonu-adım-9)).
 
 ---
 
@@ -339,6 +346,20 @@ Tam tablo: `docs/assumptions.md`.
 | relational | 7 | `card_new_addr`, `device_ent_match`, `has_recipient`, `email_mismatch`, `foreign_addr2`, `addr2_missing`, `os_browser_rare` |
 | context | 21 | `amt_log`, `amt_n_decimals`, `amt_has_3dec`, `amt_fit_freq`, `has_identity`, `dist*_log`, `freq_*` (8) |
 | passthrough | 209 | V/C/D küme temsilcileri |
+
+**Case'teki "user" feature'ları.** Veride user_id yoktur; "user" yerine entity proxy `card1 + addr1`
+(kart grubu, kişi değil; §4.5) kullanılır ve feature'lar `ent_` önekini taşır. Hepsi yalnızca geçmiş
+işlemlerden hesaplanır.
+
+| Case'teki ad | Repodaki feature |
+|---|---|
+| user_avg_amount | `ent_avg_amt` (geçmiş ortalama tutar, shift(1)) |
+| user_transaction_count | `ent_txn_count` (bu işlemden önceki işlem sayısı) |
+| tutarın kullanıcı ortalamasından sapması | `amt_ratio_to_ent_avg`, `amt_zscore_ent` |
+| user velocity | `ent_cnt_{1h,6h,24h,7d}`, `ent_sum_{1h,6h,24h,7d}` |
+| user account age | `ent_age_days` |
+
+Tam eşleme tablosu: `docs/step3.md` ("Case'teki user feature'larının karşılığı").
 
 Fit'ten öğrenilenler (`configs/entity.yaml` `learned:`): düşük hacim penceresi başlangıcı 06 (fit
 hacminin %4,07'si), yerel ofset -6, küçük tutar eşiği 25,95 (fit TransactionAmt q10), baskın addr2 87,
@@ -796,13 +817,13 @@ Kurallar bu tablo nedeniyle değiştirilmedi. Gelecek iş: ayrı bir doğrulama 
 |---|---|---|
 | Embedding | `bge-m3` (Ollama) | Yerel, ücretsiz, çok dilli retrieval için eğitilmiş, Türkçe destekli (~1,2 GB) |
 | LLM | `qwen2.5:7b` (Ollama), temperature 0 | Yerel, Türkçe üretebiliyor, 16 GB RAM'e sığıyor (~4,7 GB). Yedek ad `qwen2.5:3b` config'te (denenmedi) |
-| Vector store | FAISS `IndexFlatIP` + L2-normalize vektörler (= kosinüs) | 52 chunk için kesin arama yeterli; yaklaşık arama gereksiz karmaşıklık |
+| Vector store | FAISS `IndexFlatIP` + L2-normalize vektörler (= kosinüs) | 60 chunk için kesin arama yeterli; yaklaşık arama gereksiz karmaşıklık |
 
 Model karşılaştırması yapılmadı (K-28). İndeks `make rag-index` ile `artifacts/rag/` altına yazılır
 (`index.faiss`, `chunks.jsonl`); API indeksi yalnızca yükler.
 
 ### 10.2 Bilgi tabanı
-52 chunk, 5 belge (`knowledge_base/`):
+60 chunk, 6 belge (`knowledge_base/`):
 
 | Belge | Üretim | Chunk |
 |---|---|---|
@@ -811,6 +832,7 @@ Model karşılaştırması yapılmadı (K-28). İndeks `make rag-index` ile `art
 | `typologies.md` | Elle | 7 (card testing, velocity/burst, hesap ele geçirme, yeni kart, yabancı ülke, gece işlemleri) |
 | `feature_dictionary.md` | Elle | 7 |
 | `operations_guide.md` | Elle | 10 (karar türleri ve analist adımları) |
+| `fraud_policy.md` | Elle | 8 (ÖRNEK fraud politikası: block / review / allow ilkeleri, context, LLM'in rolü, değişiklik yönetimi; gerçek kurum politikası değildir) |
 
 Kural kartları her indeks kurulumunda config'ten yeniden üretilir: koşul düz Türkçeye çevrilir ve
 öğrenilmiş eşik değeri yazılır (ör. "441,95 (fit TransactionAmt q95)"). Gerekçe ve bilinen sınırlar
@@ -841,18 +863,21 @@ tetiklenen kuralın kartını filtreyle getirmeyi mümkün kılar. Alternatif (s
   `EmbeddingUnavailableError`, indeks yoksa `IndexNotBuiltError`. Retry yok.
 
 Eşik seçimi (13 soru: 10 KB-içi + 3 KB-dışı, etiketle ilgisi yok, `docs/step8.md`): KB-içi en düşük skor
-0,533; KB-dışı 0,341-0,596, dağılımlar örtüşüyor. 0,45'te yanlış abstain 0/10, eşikle doğru abstain 1/3;
+0,533; KB-dışı 0,341-0,596, dağılımlar örtüşüyor. 0,45'te yanlış abstain 0/10 (politika sonrası 0/12), eşikle doğru abstain 1/3;
 uçtan uca (eşik + LLM'in kendi "bilgi yok" cevabı) doğru abstain 3/3.
 
 ### 10.5 Retrieval doğruluğu ve örnek
-hit@k (gerçek indeks, 10 KB-içi soru, saf semantik arama, `tests/rag/retrieval_questions.yaml`,
+hit@k (gerçek indeks, 12 KB-içi soru, saf semantik arama, `tests/rag/retrieval_questions.yaml`,
 `pytest -m ollama`):
 
 | k | hit@k |
 |---|---|
-| 1 | 0,80 (8/10) |
-| 3 | 1,00 (10/10) |
-| 5 | 1,00 (10/10) |
+| 1 | 0,83 (10/12) |
+| 3 | 0,92 (11/12) |
+| 5 | 1,00 (12/12) |
+
+`fraud_policy.md` eklenmeden önce (52 chunk, 10 soru) hit@1/3/5 = 0,80 / 1,00 / 1,00 idi. Düşüş tek
+sorudan gelir: kart testi sorusunda R01 kartı politika chunk'ları yüzünden 3. sıradan 5. sıraya indi (`docs/step8.md`).
 
 Soruları bilgi tabanını yazan geliştirici hazırladığı için hit@k iyimser bir tahmindir; bağımsız soru
 kümesiyle ölçülmedi.
@@ -882,8 +907,11 @@ servislerden gelir; yerel LLM yalnızca (1) serbest metinli soruda plan çıkarm
 | ContextAgent | Context düzeltmesi, uygulanan C kuralları | `context_adjuster` | `adjust` |
 | RuleAgent | Kural değerlendirmesi, **tek karar kaynağı** | `rule_engine` | `evaluate` |
 | ExplainerAgent | RAG ile açıklama, "destek bilgisi" etiketli | `rag_service` (sağlayıcı olarak) | `explain` |
+| FeatureAgent (K-54) | Ham işlemden skorlanacak kaydı üretir: `/score` ile aynı kod (`OnlineScorer.record_for` -> `build_record` -> `FeaturePipeline.transform_one`), salt okur; yeni feature mantığı yok. Plan adımı değildir, AnomalyAgent'ın delegation'ıyla çalışır | `online_scorer` (`RecordSource` arayüzü, sağlayıcı olarak) | `featurize` |
 
 Roller, izinli intent'ler, varsayılan plan, süreler ve planlayıcı prompt'u `configs/agents.yaml` içindedir.
+`feature` plan rolü değildir (planlayıcı seçemez). FeatureAgent'ın feature üretimini tekrar yazmaması bilinçli
+bir karardır: batch = online eşitliği tek kod yolundan gelir; agent yalnızca bu yolu mesajlaşmaya bağlar (K-54).
 
 ### 11.2 Mesaj formatı
 `BusMessage` (pydantic v2, `src/agents/messages.py`) ortak `AgentMessage` tipini genişletir:
@@ -901,7 +929,9 @@ timestamp, payload_keys, detail`. Bus dışı olaylar (`plan_fallback`, `explana
   zorunlu; soru varsa `explainer:explain` de zorunlu (K-51). Herhangi bir ihlal planı onarmadan reddeder ve varsayılan plana düşer (trace'te `plan_fallback` + sebep).
 - Plan karar kaynağını değiştiremez: karar yalnızca RuleAgent cevabından kopyalanır; açıklama cevabının tipinde karar alanı yoktur.
 - Eksik girdide agent bus üzerinden ister: RuleAgent skor almamışsa ContextAgent'a `adjust`, ContextAgent da
-  AnomalyAgent'a `score` yollar. Agent'lar birbirini import etmez. Delegation derinliği 6 ile sınırlı.
+  AnomalyAgent'a `score`, AnomalyAgent da kayıt yerine ham işlem aldıysa FeatureAgent'a `featurize` yollar.
+  `/explain` ham işlemi gönderir (zincir trace'te görünür); üretilen kayıt yanıtlarla (`ScoreReply.record`)
+  koordinatöre döner ve sonraki adımlara verilir. Agent'lar birbirini import etmez. Delegation derinliği 6 ile sınırlı.
 - Bus eşzamanlıdır (sync, süreç içi, K-36); adımlar birbirine bağımlı olduğu için paralel iş yok.
 - RuleAgent kural motorunu `update_state=False` ile çağırır; agent yolu online cooldown deposunu yazmaz (K-35).
 
@@ -924,15 +954,28 @@ Gerçek demo (`make agents-demo`, `reports/agents/summary.json`), TransactionID 
 inceleme notu yaz", LLM planı `rule:evaluate -> explainer:explain`; RuleAgent eksik skoru zincirle aldı:
 
 ```
-1. client      -> coordinator  analyze   [ok]  40691 ms
-2. coordinator -> rule         evaluate  [ok]    130 ms
-3. rule        -> context      adjust    [ok]    120 ms   (delegation, parent = 2)
-4. context     -> anomaly      score     [ok]    111 ms   (delegation, parent = 3)
-5. coordinator -> explainer    explain   [ok]  35996 ms
+1. client      -> coordinator  analyze   [ok] 106961 ms
+2. coordinator -> rule         evaluate  [ok]    178 ms
+3. rule        -> context      adjust    [ok]    159 ms   (delegation, parent = 2)
+4. context     -> anomaly      score     [ok]    144 ms   (delegation, parent = 3)
+5. coordinator -> explainer    explain   [ok]  96163 ms
 ```
 
-Üç demo işleminde online karar batch kararıyla aynı (block R01 / review skor eşiği / allow). Karar
-0,1-0,2 sn'de hazırdır; bekleyen açıklamadır (açıklama 16-42 sn, LLM planı 3,5-4,6 sn).
+Ham işlem (`examples/requests/review.json`, TransactionID 91000001, K-54); AnomalyAgent kaydı FeatureAgent'tan ister:
+
+```
+1. client      -> coordinator  analyze   [ok]  80103 ms
+2. coordinator -> anomaly      score     [ok]    931 ms
+3. anomaly     -> feature      featurize [ok]    857 ms   (delegation, parent = 2)
+4. coordinator -> context      adjust    [ok]     10 ms
+5. coordinator -> rule         evaluate  [ok]     14 ms
+6. coordinator -> explainer    explain   [ok]  79146 ms
+```
+
+Dört demo işleminde online karar beklenen batch kararıyla aynı (block R01 / review skor eşiği / allow /
+review R04). Karar 0,1-1 sn'de hazırdır (ilk featurize'da pipeline yüklemesi dahil); bekleyen açıklamadır
+(son koşuda 66-96 sn, LLM planı 8,5-10,6 sn). "Sadece karar" sorusunda LLM açıklamasız plan önerdi ve K-51
+gereği varsayılan plana düşüldü (`plan_fallback`).
 
 ---
 
@@ -1082,7 +1125,7 @@ Adım dokümanlarının "Bilinen sınırlar" bölümlerinden derlendi.
 **RAG ve agent'lar**
 - 7B yerel model talimatı her zaman izlemiyor; `grounded=true` yalnızca kaynak id'lerinin doğru olduğunu
   gösterir, içerik doğruluğunu değil. Çıktı otomasyon için kullanılmamalı.
-- hit@k küçük ve yanlı (10 soru, KB yazarı hazırladı); reranker / RRF denenmedi; retry yok.
+- hit@k küçük ve yanlı (12 soru, KB yazarı hazırladı); reranker / RRF denenmedi; retry yok.
 - `rule_notes.yaml` sayıları elle bakım ister; `/rules/reload` RAG kural kartlarını yenilemez (`make rag-index` gerekir).
 - Görev cümlesi tespiti regex tabanlı; LLM planının kalitesi ölçülmedi.
 - Zaman aşımında LLM çağrısı arka planda HTTP timeout'una kadar sürer ve Ollama'yı meşgul tutabilir.

@@ -7,7 +7,7 @@ Eşikler ve entity adayları `configs/profiling.yaml` içindedir; seçilen entit
 ## Çıktılar
 | Dosya | İçerik |
 |---|---|
-| `outliers.parquet` | Sayısal kolon başına IQR çitleri ve robust z (median/MAD, 0,6745 ölçeği, eşik 3,5) aykırı sayıları; `TransactionAmt__log1p` ayrı satır |
+| `outliers.parquet|csv` | Sayısal kolon başına IQR çitleri ve robust z (median/MAD, 0,6745 ölçeği, eşik 3,5) aykırı sayıları; `TransactionAmt__log1p` ayrı satır |
 | `distributions.parquet` | count, mean, std, min/max, skew, kurtosis, q01..q99 |
 | `categorical_topn.parquet` | Kategorik kolonlarda ilk 10 değer ve oranı |
 | `rare_categories.parquet`, `rare_summary.csv` | Seyrek kombinasyonlar (oran < 1e-4; NaN ayrı değer). Çiftler: (card4,card6,ProductCD), (P_emaildomain,R_emaildomain), (DeviceType,DeviceInfo) + tek kolonlar |

@@ -2,6 +2,8 @@
 # Decisions: docs/decisions.md K-34...  The fraud label is never used.
 
 # Allowed agents and the intents each one accepts. The planner may only use these.
+# The feature agent (intent featurize, K-54) is not listed: it is not a plan step; the anomaly
+# agent asks it by delegation when it gets a raw transaction instead of a record.
 roles:
   anomaly:
     description: "Step 4-5 anomaly layers: layer scores and the normalized aggregate score."

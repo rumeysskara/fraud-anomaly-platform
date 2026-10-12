@@ -20,6 +20,11 @@
   expect: {doc_type: typology, rule_id: C2}
 - question: "Aynı anda hem block hem allow kuralı tetiklenirse hangisi kazanır?"
   expect: {doc_type: rule_card, chunk_id: "rule_cards#cakisma-cozumu-conflict-resolution"}
+# Added with knowledge_base/fraud_policy.md (also written before the real run).
+- question: "Politikaya göre hangi durumlar otomatik durdurma gerekçesidir?"
+  expect: {doc_type: policy}
+- question: "Fraud politikasında LLM açıklamasının karar üzerindeki rolü nedir?"
+  expect: {doc_type: policy}
 # Out-of-KB questions (the knowledge base has no answer): the service should abstain.
 - question: "Türkiye'nin başkenti neresidir?"
   expect: {out_of_kb: true}

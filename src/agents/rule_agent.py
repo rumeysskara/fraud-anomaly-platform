@@ -38,9 +38,11 @@ class RuleAgent(Agent):
         unclipped = request.adjusted_score_unclipped
         layers: dict[str, float] = request.layer_scores or {}
         context_rules: list[str] = []
+        record = request.record
         if anomaly is None or adjusted is None or unclipped is None:
             ask = AdjustRequest(
-                record=request.record,
+                record=record,
+                transaction=request.transaction,
                 anomaly_score=request.anomaly_score,
                 layer_scores=request.layer_scores,
             )
@@ -51,7 +53,10 @@ class RuleAgent(Agent):
                 ctx.layer_scores,
                 ctx.applied_rules,
             )
-        record = {**request.record, "anomaly_score": anomaly, "adjusted_score": adjusted}
+            record = record if record is not None else ctx.record
+        if record is None:
+            raise ValueError("evaluate got scores but no record")
+        record = {**record, "anomaly_score": anomaly, "adjusted_score": adjusted}
         result = self.engine.evaluate(record, unclipped, update_state=self.update_state)
         return EvaluateReply(
             final_decision=result.final_decision,

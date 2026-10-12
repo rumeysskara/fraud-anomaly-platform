@@ -77,7 +77,7 @@ def run_profile(
     ]
     numeric = sch[(sch["column"].isin(num_cols)) & (sch["inferred_type"] == "numeric")]["column"]
     numeric = numeric.tolist()
-    _save(distributions.outlier_table(Xf, numeric, cfg["outliers"]), out_dir, "outliers")
+    _save(distributions.outlier_table(Xf, numeric, cfg["outliers"]), out_dir, "outliers", csv=True)
     _save(
         distributions.numeric_distributions(Xf, numeric, cfg["distributions"]),
         out_dir,

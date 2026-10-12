@@ -117,3 +117,11 @@ class RuleStore(ABC):
     @abstractmethod
     def parse(self, payload: Any) -> list[Any]:
         """Validate a rule set given at request time and return it (not stored)."""
+
+
+class RecordSource(ABC):
+    """Turns one raw transaction into the scoring record (features + raw fields), read-only."""
+
+    @abstractmethod
+    def record_for(self, txn: dict[str, Any]) -> dict[str, Any]:
+        """Return the record of `txn` without changing any history (FeatureAgent, Step 9)."""

@@ -1,4 +1,4 @@
-"""Step 9 demo: run three holdout transactions (block / review / allow) through the agents.
+"""Step 9 demo: three holdout transactions (block / review / allow) + one raw transaction.
 
 Usage: python scripts/run_agents_demo.py
 The three transactions are picked from the HOLDOUT by the rule engine's batch decision only
@@ -9,6 +9,12 @@ data/processed, and the AnomalyAgent, ContextAgent, RuleAgent and ExplainerAgent
 bus with the real Ollama models. If Ollama or the RAG index is missing the run still finishes
 (default plan, template explanation flagged rag_unavailable/llm_unavailable). Traces:
 reports/agents/.
+
+The three holdout rows are sent as ready records built from the batch features: the online entity
+store holds the state after the LAST row of the data, so rebuilding an old row online would count
+its own later transactions as history. The fourth run (K-54) sends a RAW transaction, the API
+example examples/requests/review.json (fresh TransactionID, online decision = batch decision by
+construction): the AnomalyAgent asks the FeatureAgent for the record, as in /explain.
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ QUESTIONS: dict[str, str | None] = {
     "review": "TransactionID {tid} işlemini incele ve bir inceleme notu yaz.",
     "allow": "TransactionID {tid} işleminin kararı nedir? Açıklama gerekmez, sadece karar.",
 }
+RAW_EXAMPLE = ROOT / "examples" / "requests" / "review.json"  # raw transaction, decision review
 
 
 def pick_transactions(hits: pd.DataFrame, holdout_ids: pd.Index) -> dict[str, int]:
@@ -119,12 +126,27 @@ def main() -> None:
     coordinator = container.coordinator()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     summary = []
+    runs: list[tuple[str, int, AnalystRequest, pd.Series]] = []
     for decision, tid in picks.items():
         question = QUESTIONS[decision]
         question = question.format(tid=tid) if question else None
-        log.info("running %s (%s) question=%r", tid, decision, question)
-        response = coordinator.analyze(AnalystRequest(record=records[tid], question=question))
-        path = OUT_DIR / f"trace_{decision}_{tid}.json"
+        request = AnalystRequest(record=records[tid], question=question)
+        runs.append((decision, tid, request, hits.loc[tid]))
+    raw = json.loads(RAW_EXAMPLE.read_text(encoding="utf-8"))
+    raw_request = AnalystRequest(transaction=raw)  # featurized by the FeatureAgent
+    runs.append(
+        (
+            "raw_review",
+            int(raw["TransactionID"]),
+            raw_request,
+            pd.Series({"final_decision": "review"}),
+        )
+    )
+    for name, tid, request, batch in runs:
+        question = request.question
+        log.info("running %s (%s) question=%r", tid, name, question)
+        response = coordinator.analyze(request)
+        path = OUT_DIR / f"trace_{name}_{tid}.json"
         path.write_text(
             json.dumps(
                 {"question": question, **response.model_dump(mode="json")},
@@ -134,7 +156,7 @@ def main() -> None:
             ),
             encoding="utf-8",
         )
-        summary.append(summarize(response, hits.loc[tid]))
+        summary.append(summarize(response, batch))
         log.info("wrote %s", path)
     (OUT_DIR / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, default=str), encoding="utf-8"

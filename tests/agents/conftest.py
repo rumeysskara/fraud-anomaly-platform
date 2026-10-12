@@ -13,7 +13,7 @@ from src.agents.config import AgentSettings, load_agent_settings
 from src.agents.coordinator import CoordinatorAgent
 from src.agents.factory import AgentFactory
 from src.agents.planner import Planner
-from src.core.interfaces import ContextAdjuster, LLMClient
+from src.core.interfaces import ContextAdjuster, LLMClient, RecordSource
 from src.core.types import AdjustedResult, Explanation, ScoreResult
 from src.rag.errors import LLMUnavailableError
 from src.rag.service import RAGAnswer, SourceRef
@@ -39,6 +39,17 @@ class FakeScoring:
             layer_scores={"column": 0.5, "temporal": 0.9},
             explanations=[Explanation(source="column", message="m")],
         )
+
+
+class FakeRecords(RecordSource):
+    """RecordSource stand-in: the raw transaction plus one feature column; counts calls."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def record_for(self, txn: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append(txn)
+        return {**txn, "ent_txn_count": 7}
 
 
 class FakeAdjuster(ContextAdjuster):
@@ -160,13 +171,21 @@ class System:
         engine: FakeEngine,
         rag: FakeRAG,
         llm: FakePlannerLLM,
+        records: FakeRecords | None = None,
     ) -> None:
         self.settings, self.scoring, self.adjuster = settings, scoring, adjuster
-        self.engine, self.rag, self.llm = engine, rag, llm
+        self.engine, self.rag, self.llm, self.records = engine, rag, llm, records
         self.bus = MessageBus(settings.bus.max_depth)
         self.planner = Planner(llm, settings)
         factory = AgentFactory(
-            self.bus, settings, scoring, adjuster, engine, lambda: rag, self.planner  # type: ignore
+            self.bus,
+            settings,
+            scoring,  # type: ignore[arg-type]
+            adjuster,
+            engine,  # type: ignore[arg-type]
+            lambda: rag,  # type: ignore[arg-type,return-value]
+            self.planner,
+            records=(lambda: records) if records is not None else None,  # type: ignore[arg-type]
         )
         self.coordinator: CoordinatorAgent = factory.create_system()
 
@@ -179,7 +198,7 @@ def settings() -> AgentSettings:
 
 @pytest.fixture
 def make_system(settings: AgentSettings):
-    """Factory fixture: make_system(scoring=..., engine=..., rag=..., llm=..., settings=...)."""
+    """Factory fixture: make_system(scoring=..., engine=..., rag=..., llm=..., records=...)."""
 
     def build(
         scoring: FakeScoring | None = None,
@@ -187,6 +206,7 @@ def make_system(settings: AgentSettings):
         rag: FakeRAG | None = None,
         llm: FakePlannerLLM | None = None,
         cfg: AgentSettings | None = None,
+        records: FakeRecords | None = None,
     ) -> System:
         return System(
             cfg or settings,
@@ -195,6 +215,7 @@ def make_system(settings: AgentSettings):
             engine or FakeEngine(),
             rag or FakeRAG(),
             llm or FakePlannerLLM(),
+            records,
         )
 
     return build

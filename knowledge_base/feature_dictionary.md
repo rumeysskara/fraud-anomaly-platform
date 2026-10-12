@@ -20,7 +20,8 @@ Kurallarda, context düzeltmelerinde ve açıklama metinlerinde geçen feature'l
 
 | Feature | Anlamı |
 |---|---|
-| ent_txn_count | Entity'nin bu işlemden önceki işlem sayısı. Trusted tanımında fit q90 (809) üzeri "uzun geçmiş" sayılır. |
+| ent_txn_count | Entity'nin bu işlemden önceki işlem sayısı (user_transaction_count karşılığı). Trusted tanımında fit q90 (809) üzeri "uzun geçmiş" sayılır. |
+| ent_avg_amt | Entity'nin geçmiş işlemlerinin ortalama tutarı (user_avg_amount karşılığı); geçmiş yoksa fit genel ortalaması. |
 | ent_age_days | Entity'nin ilk işleminden bu işleme kadar geçen gün. |
 | ent_cnt_1h | Entity'nin son 1 saatteki önceki işlem sayısı (24 saatlik ve 7 günlük karşılıkları da vardır). |
 | small_amt_streak_1h | Entity'nin son 1 saatteki önceki küçük tutarlı (<= fit q10) işlem sayısı. Card testing sinyalidir. |

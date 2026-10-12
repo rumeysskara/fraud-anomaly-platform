@@ -36,6 +36,22 @@ Tam liste: `reports/features/feature_catalog.parquet|csv` (ad, grup, formül, a�
 | context | 21 | amt_log, amt_n_decimals, amt_has_3dec, amt_fit_freq, amt_is_common, amt_vs_product_q, amt_dev_card4_card6, amt_dev_addr1, has_identity, dist1/2_missing, dist1/2_log, freq_{card1, addr1, P_emaildomain, R_emaildomain, DeviceInfo, id_30, id_31, id_33} |
 | passthrough | 209 | ham V (185), C (13), D (11): redundancy_clusters temsilcileri + küme dışı kolonlar; V sayısal, NaN korunur |
 
+### Case'teki "user" feature'larının karşılığı
+Veride user_id yoktur. "User" yerine entity proxy H = `card1 + addr1` kullanılır (K-05): bu bir kart grubudur, kişi değildir.
+Case'teki örnek adlar repoda `ent_` önekiyle yer alır. Hepsi yalnızca geçmiş işlemlerden hesaplanır (`shift(1)`, satırın kendisi sayılmaz).
+
+| Case'teki ad | Repodaki feature | Tanım (feature_catalog.csv) |
+|---|---|---|
+| user_avg_amount | `ent_avg_amt` | Entity'nin geçmiş işlemlerinin ortalama tutarı (expanding mean, shift(1)); geçmiş yoksa fit genel ortalaması |
+| user_transaction_count | `ent_txn_count` | Entity'nin bu işlemden önceki işlem sayısı |
+| user_std_amount | `ent_std_amt` | Geçmiş tutarların std'si; 2'den az geçmiş işlemde fit genel std'si |
+| user_max_amount | `ent_max_amt` | Geçmiş en yüksek tutar; geçmiş yoksa 0 |
+| amount / user_avg_amount | `amt_ratio_to_ent_avg`, `amt_zscore_ent` | Tutarın entity'nin geçmiş ortalamasına oranı ve z-skoru |
+| user velocity (son 1s/6s/24s/7g) | `ent_cnt_{1h,6h,24h,7d}`, `ent_sum_{1h,6h,24h,7d}` | Penceredeki geçmiş işlem sayısı ve toplam tutar |
+| time since last transaction | `time_since_last_txn`, `avg_inter_arrival` | Önceki işlemden bu yana geçen saniye; geçmiş işlemler arası ortalama süre |
+| user account age | `ent_age_days` | Entity'nin ilk işleminden bu yana geçen gün |
+| user device / e-mail count | `ent_unique_device`, `ent_unique_email` | Entity'nin daha önce kullandığı farklı cihaz / e-posta alanı sayısı |
+
 Önemli tanımlar:
 - **Düşük hacim penceresi:** `is_low_volume_window` = (hour - başlangıç) mod 24 < 6; başlangıç fit'ten `argmin` ile (K-06).
 - **Velocity:** pencereler 1h/6h/24h/7d (sayım + toplam tutar); bir geçmiş işlem `event_dt >= dt - pencere` ise sayılır, satırın kendisi ve sonraki satırlar sayılmaz (K-07). 30 gün yok.

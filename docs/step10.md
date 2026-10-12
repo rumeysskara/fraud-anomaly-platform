@@ -119,7 +119,7 @@ K-50 öncesi ısınmış modelle `explain_review.json` 50,4 sn'de `timeout` verm
 Container da `SAMPLE_N`'i okur: `SAMPLE_N=50000 make api` örneklem artifact'larıyla açılır (Adım 8-10 review, Ö4). `SAMPLE_N=50000 make pipeline` baştan sona hatasız çalıştı: toplam 46,6 sn (profile ~22 sn, features ~2 sn, score ~10 sn, context ~5 sn, rules ~8 sn).
 
 ## Testler
-`tests/api/` (50 test): TestClient + `container.<provider>.override` ile sahte LLM/RAG; tüm endpoint'ler; 422 (eksik alan, tür, negatif tutar, bilinmeyen alan, geçersiz kural seti, `k` sınırı); Ollama/embedding kapalı; zaman aşımı; `/score`'da LLM'in çağrılmaması; idempotent cooldown (aynı ID iki kez -> durum bir kez); `request` kural setinin durumu yazmaması; `/explain`'de LLM olmadan dolu `facts`; yanıt/örneklerde etiket alanı yok; alt katmanlar `src.api` import etmez; örnek dosyalar şemaya uyar.
+`tests/api/` (64 test, `real_data` hariç): TestClient + `container.<provider>.override` ile sahte LLM/RAG; tüm endpoint'ler; 422 (eksik alan, tür, negatif tutar, bilinmeyen alan, geçersiz kural seti, `k` sınırı); Ollama/embedding kapalı; zaman aşımı; `/score`'da LLM'in çağrılmaması; idempotent cooldown (aynı ID iki kez -> durum bir kez); `request` kural setinin durumu yazmaması; `/explain`'de LLM olmadan dolu `facts`; yanıt/örneklerde etiket alanı yok; alt katmanlar `src.api` import etmez; örnek dosyalar şemaya uyar; FeatureAgent kaydı `build_record` ile birebir aynı ve `/explain` trace'inde `anomaly -> feature` delegation'ı var (`test_feature_agent_record.py`, K-54).
 
 ## Bilinen sınırlar
 - **Bellek içi store:** entity geçmişi ve cooldown durumu tek süreçte, bellekte. Yeniden başlatınca snapshot'a döner (o ana kadar `/score` ile eklenenler kaybolur). Birden çok worker her biri kendi geçmişini tutar ve tutarsız olur; `make api` tek worker'dır. Gelecek iş: Redis (paylaşımlı, kalıcı store) ve ayrı bir "işlem kaydı" endpoint'i.
@@ -129,6 +129,7 @@ Container da `SAMPLE_N`'i okur: `SAMPLE_N=50000 make api` örneklem artifact'lar
 - Geçersiz kural seti yanıtı yalnızca şema hatalarını gösterir; bilinmeyen feature/param adları şema geçtikten sonra ayrı bir 422 olarak döner.
 - Gecikme ölçümü tek makinede, ardışık ve küçüktür; eşzamanlı yük testi yapılmadı. Kimlik doğrulama, rate limit ve TLS yok.
 - `/agents/analyze` (skill'de opsiyonel) yazılmadı; `/explain` agent akışını çalıştırır ve trace döner.
+- K-54: `/explain` agent akışına hazır kaydı değil ham işlemi verir; AnomalyAgent kaydı FeatureAgent'tan ister (`anomaly -> feature featurize`, trace'te görünür). FeatureAgent `OnlineScorer.record_for` ile `facts`'i üreten `analyze` ile aynı kaydı okur; `/score` yolu değişmedi.
 - `/rules/reload` kural motorunu yeniler, RAG bilgi tabanındaki kural kartlarını yenilemez; açıklamaların güncel kartı kullanması için `make rag-index` tekrar çalıştırılmalıdır.
 - `/rules/reload`, eşzamanlı `/score` istekleriyle aynı kilidi kullanmaz; reload sırasında gelen bir istek eski ya da yeni kural setiyle değerlendirilebilir.
 - Bellek: API açılışı ~1,8 sn, süreç belleği (RSS) ~547 MB (tam veri artifact'ları, Adım 8-10 review ölçümü).

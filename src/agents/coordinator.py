@@ -98,15 +98,18 @@ class CoordinatorAgent(Agent):
         parent: BusMessage,
     ) -> Any:
         """Send one plan step with the results gathered so far; return the validated reply."""
-        record = request.record
         score: ScoreReply | None = state.get(ANOMALY)
         adjusted: AdjustReply | None = state.get(CONTEXT)
         base = adjusted or score  # both carry anomaly_score and layer_scores
+        # a record built by the feature agent (delegation) replaces the raw transaction
+        record = request.record or (score and score.record) or (adjusted and adjusted.record)
+        transaction = None if record else request.transaction
         if agent == ANOMALY:
-            payload, model = ScoreRequest(record=record), ScoreReply
+            payload, model = ScoreRequest(record=record, transaction=transaction), ScoreReply
         elif agent == CONTEXT:
             payload = AdjustRequest(
                 record=record,
+                transaction=transaction,
                 anomaly_score=score.anomaly_score if score else None,
                 layer_scores=score.layer_scores if score else None,
             )
@@ -114,6 +117,7 @@ class CoordinatorAgent(Agent):
         elif agent == RULE:
             payload = EvaluateRequest(
                 record=record,
+                transaction=transaction,
                 anomaly_score=base.anomaly_score if base else None,
                 layer_scores=base.layer_scores if base else None,
                 adjusted_score=adjusted.adjusted_score if adjusted else None,
@@ -145,10 +149,9 @@ class CoordinatorAgent(Agent):
         adjusted: AdjustReply | None = state.get(CONTEXT)
         score: ScoreReply | None = state.get(ANOMALY)
         explanation: ExplainReply | None = state.get(EXPLAINER)
-        tid = request.record.get("TransactionID")
         response = AgentResponse(
             correlation_id=message.correlation_id,
-            transaction_id=int(tid) if tid is not None else None,
+            transaction_id=request.transaction_id,
             status="error" if rule is None else ("degraded" if errors else "ok"),
             plan=plan,
             errors=errors,

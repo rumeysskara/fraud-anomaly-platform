@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.core.types import AgentMessage
 
@@ -18,6 +18,7 @@ ANOMALY = "anomaly"
 CONTEXT = "context"
 RULE = "rule"
 EXPLAINER = "explainer"
+FEATURE = "feature"  # internal: reached only by delegation from the anomaly agent
 CLIENT = "client"
 
 INTENT_ANALYZE = "analyze"
@@ -25,6 +26,7 @@ INTENT_SCORE = "score"
 INTENT_ADJUST = "adjust"
 INTENT_EVALUATE = "evaluate"
 INTENT_EXPLAIN = "explain"
+INTENT_FEATURIZE = "featurize"
 
 
 def _new_id() -> str:
@@ -84,17 +86,49 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class AnalystRequest(BaseModel):
+class _RecordOrTransaction(BaseModel):
+    """`record` = ready record (features + raw fields); `transaction` = raw payload.
+
+    Exactly one is needed. With only a transaction the anomaly agent asks the feature agent to
+    build the record (delegation); the record then travels back in the replies.
+    """
+
+    record: dict[str, Any] | None = None
+    transaction: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def _one_input(self) -> _RecordOrTransaction:
+        if (self.record is None) == (self.transaction is None):
+            raise ValueError("give exactly one of record or transaction")
+        return self
+
+
+class AnalystRequest(_RecordOrTransaction):
     """What the caller (API, script) gives the coordinator."""
 
-    record: dict[str, Any]
     question: str | None = None  # free-text analyst task; None -> deterministic default plan
 
+    @property
+    def transaction_id(self) -> int | None:
+        """TransactionID of the record or the raw transaction."""
+        tid = (self.record or self.transaction or {}).get("TransactionID")
+        return int(tid) if tid is not None else None
 
-class ScoreRequest(_Strict):
-    """anomaly.score: record with the detector input columns."""
+
+class FeaturizeRequest(_Strict):
+    """feature.featurize: raw transaction -> record (Step 3 FeaturePipeline.transform_one)."""
+
+    transaction: dict[str, Any]
+
+
+class FeaturizeReply(_Strict):
+    """The record the Step 4-7 services expect."""
 
     record: dict[str, Any]
+
+
+class ScoreRequest(_Strict, _RecordOrTransaction):
+    """anomaly.score: a ready record, or a raw transaction that is featurized first."""
 
 
 class ScoreReply(_Strict):
@@ -104,12 +138,12 @@ class ScoreReply(_Strict):
     raw_score: float
     layer_scores: dict[str, float]
     explanations: list[dict[str, Any]] = Field(default_factory=list)
+    record: dict[str, Any] | None = None  # set only when the anomaly agent featurized
 
 
-class AdjustRequest(_Strict):
+class AdjustRequest(_Strict, _RecordOrTransaction):
     """context.adjust: score inputs are optional (missing ones come from the anomaly agent)."""
 
-    record: dict[str, Any]
     anomaly_score: float | None = None
     layer_scores: dict[str, float] | None = None
 
@@ -123,12 +157,12 @@ class AdjustReply(_Strict):
     adjusted_score_unclipped: float
     applied_rules: list[str]
     explanations: list[dict[str, Any]] = Field(default_factory=list)
+    record: dict[str, Any] | None = None  # set only when the record was built in a delegation
 
 
-class EvaluateRequest(_Strict):
+class EvaluateRequest(_Strict, _RecordOrTransaction):
     """rule.evaluate: missing scores are requested from the context agent (which asks anomaly)."""
 
-    record: dict[str, Any]
     anomaly_score: float | None = None
     layer_scores: dict[str, float] | None = None
     adjusted_score: float | None = None

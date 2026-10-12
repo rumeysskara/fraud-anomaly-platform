@@ -197,6 +197,7 @@ artifacts/          fit edilmiş modeller, FAISS indeksi; repoda yok
 - Teknik doküman: [docs/technical_doc.md](docs/technical_doc.md)
 - Adım dokümanları: [docs/step0.md](docs/step0.md) ... [docs/step10.md](docs/step10.md)
 - Karar kayıtları: [docs/decisions.md](docs/decisions.md)
+- Case gereksinimleri kapsama tablosu: [docs/requirements_coverage.md](docs/requirements_coverage.md)
 - Varsayımlar: [docs/assumptions.md](docs/assumptions.md), EDA: [docs/eda.md](docs/eda.md),
   veri sözlüğü: [docs/data_dictionary.md](docs/data_dictionary.md)
 - Adım sonu denetim raporları: [reports/reviews/](reports/reviews/)

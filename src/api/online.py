@@ -24,7 +24,7 @@ from src.api.config import ApiSettings
 from src.context.derive import EMAIL_KNOWN, LAYER_SCORE_SUFFIX
 from src.context.engine import UNCLIPPED
 from src.context.inputs import RAW_SOURCE_COLUMNS
-from src.core.interfaces import ContextAdjuster
+from src.core.interfaces import ContextAdjuster, RecordSource
 from src.detection.aux import AUX_SOURCE_COLUMNS, build_aux
 from src.features.pipeline import FeaturePipeline
 from src.features.utils import NA_KEY, amount_array, entity_keys, get_col, value_keys
@@ -89,7 +89,7 @@ class _LRU:
         return len(self._items)
 
 
-class OnlineScorer:
+class OnlineScorer(RecordSource):
     """Scores single transactions with the fitted services and keeps the online history.
 
     - `score(txn)`: the /score path. Updates entity history, hour history and the cooldown store
@@ -233,10 +233,19 @@ class OnlineScorer:
         A transaction that /score already handled reuses its recorded features (the history
         before it), so explaining it later gives the same numbers.
         """
+        with self._lock:
+            record = self.record_for(txn)
+            return record, self.evaluate(record, update_state=False, rules=rules)
+
+    def record_for(self, txn: dict[str, Any]) -> dict[str, Any]:
+        """Record of a transaction without writing state (FeatureAgent and `analyze` use it).
+
+        A transaction that /score already handled returns its recorded features (the history
+        before it); any other transaction is built with `build_record` (update=False).
+        """
         tid = int(txn["TransactionID"])
         with self._lock:
-            record = self._records.get(tid) or self.build_record(txn)
-            return record, self.evaluate(record, update_state=False, rules=rules)
+            return self._records.get(tid) or self.build_record(txn)
 
     def _commit(self, txn: dict[str, Any], record: dict[str, Any]) -> None:
         """Append the transaction to the entity history and the temporal hour history."""

@@ -102,6 +102,8 @@ def test_run_profile_writes_outputs(frame, tmp_path):
     ]:
         assert (tmp_path / "p" / f"{name}.parquet").exists(), name
     assert (tmp_path / "p" / "summary.md").exists()
+    for name in ["outliers", "rare_summary"]:  # small tables also kept as csv for the repo
+        assert (tmp_path / "p" / f"{name}.csv").exists(), name
     assert (tmp_path / "f" / "entity_size_distribution.png").exists()
     assert len(res["schema"]) == frame.shape[1] + 1
     cands = set(res["entity"]["candidate"])

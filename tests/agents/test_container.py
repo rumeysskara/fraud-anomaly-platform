@@ -33,6 +33,7 @@ def test_coordinator_uses_overridden_services() -> None:
     assert isinstance(coordinator, CoordinatorAgent)
     assert coordinator is container.coordinator()  # Singleton
     assert set(container.message_bus().agents) == {
+        "feature",
         "anomaly",
         "context",
         "rule",
@@ -55,7 +56,7 @@ def test_label_name_absent_from_agent_files() -> None:
 
 def test_agents_do_not_import_each_other() -> None:
     """Mediator rule: agent modules only know the bus, messages and services."""
-    names = ["anomaly_agent", "context_agent", "rule_agent", "explainer_agent"]
+    names = ["anomaly_agent", "context_agent", "rule_agent", "explainer_agent", "feature_agent"]
     for name in names:
         text = (ROOT / "src" / "agents" / f"{name}.py").read_text(encoding="utf-8")
         for other in names:
