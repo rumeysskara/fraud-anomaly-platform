@@ -10,7 +10,7 @@ import yaml
 
 from src.rag.config import load_rag_settings
 from src.rag.embedder import OllamaEmbedder
-from src.rag.retrieval_eval import evaluate_retrieval
+from src.rag.retrieval_eval import abstain_rates, evaluate_retrieval
 from src.rag.retriever import HybridRetriever
 from src.rag.store import FaissVectorStore
 
@@ -38,6 +38,12 @@ def test_real_retrieval_hit_at_k() -> None:
     )
     result = evaluate_retrieval(retriever, QUESTIONS, KS)
     for row in result["rows"]:
-        print(f"rank={row['rank']}  {row['question']}  -> {row['retrieved'][:3]}")
+        print(
+            f"rank={row['rank']} top={row['top_score']:.3f}  {row['question']}"
+            f"  -> {row['retrieved'][:3]}"
+        )
+    rates = abstain_rates(result["rows"], settings.retrieval.abstain_threshold)
+    print("abstain:", rates, "threshold:", settings.retrieval.abstain_threshold)
     print("hit@k:", {k: round(v, 2) for k, v in result["hit_at_k"].items()})
     assert result["hit_at_k"][5] >= MIN_HIT_AT_5
+    assert rates["false_abstain"] == 0.0  # a valid question must never be refused

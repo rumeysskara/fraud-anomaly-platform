@@ -37,13 +37,27 @@ def evaluate_retrieval(
     rows = []
     for item in questions:
         chunks = retriever.retrieve(item["question"], top)
+        out_of_kb = bool(item["expect"].get("out_of_kb"))
         rows.append(
             {
                 "question": item["question"],
                 "expect": item["expect"],
-                "rank": first_hit_rank(chunks, item["expect"]),
+                "out_of_kb": out_of_kb,
+                "top_score": chunks[0].metadata["top_semantic_score"] if chunks else 0.0,
+                "rank": None if out_of_kb else first_hit_rank(chunks, item["expect"]),
                 "retrieved": [c.metadata["chunk_id"] for c in chunks],
             }
         )
-    hit = {k: sum(1 for r in rows if r["rank"] and r["rank"] <= k) / len(rows) for k in ks}
+    in_kb = [r for r in rows if not r["out_of_kb"]]
+    hit = {k: sum(1 for r in in_kb if r["rank"] and r["rank"] <= k) / len(in_kb) for k in ks}
     return {"hit_at_k": hit, "rows": rows}
+
+
+def abstain_rates(rows: list[dict[str, Any]], threshold: float) -> dict[str, float]:
+    """Correct-abstain rate (out-of-KB questions) and false-abstain rate (in-KB questions)."""
+    out = [r for r in rows if r["out_of_kb"]]
+    inside = [r for r in rows if not r["out_of_kb"]]
+    return {
+        "correct_abstain": sum(r["top_score"] < threshold for r in out) / max(len(out), 1),
+        "false_abstain": sum(r["top_score"] < threshold for r in inside) / max(len(inside), 1),
+    }

@@ -2,7 +2,7 @@
 
 **isFraud kullanıldı mı: hayır.** RAG katmanı (`src/rag/`, `knowledge_base/`, `configs/rag.yaml`, `scripts/build_rag_index.py`) etiketi hiçbir yerde okumaz; testle de doğrulanır (`tests/rag/test_no_label.py`). Bilgi tabanındaki holdout sayıları (precision, lift) Adım 6-7 raporlarından (`docs/step6.md`, `docs/step7.md`) metin olarak alınmıştır; hiçbir kural, eşik veya retrieval ayarı bu sayılara göre seçilmedi.
 
-Karar kayıtları: K-28 ... K-32 (`docs/decisions.md`).
+Karar kayıtları: K-28 ... K-33 (`docs/decisions.md`).
 
 ## Ne yapıldı
 Analistin "bu işlem neden review aldı?", "R03 nedir?", "block kararında ne yapmalıyım?" gibi sorularını, projenin kendi kural ve politika belgelerinden, yalnızca yerel modellerle (Ollama) cevaplayan bir RAG hattı kuruldu.
@@ -22,7 +22,7 @@ soru (+ kural motoru explain çıktısı) ─> HybridRetriever ─> PromptBuilde
 | Bileşen | Seçim | Gerekçe |
 |---|---|---|
 | Embedding | `bge-m3` (Ollama) | Yerel ve ücretsiz; çok dilli retrieval için eğitilmiş, Türkçeyi destekliyor; ~1,2 GB |
-| LLM | `qwen2.5:7b` (Ollama), temperature 0,1 | Yerel; Türkçe konuşabiliyor; 4-bit ~4,7 GB ile 16 GB RAM'e sığıyor. Yedek ad `qwen2.5:3b` yalnızca config'te durur, birincil model kurulu değilse denenir (bu makinede kurulu değil, denenmedi) |
+| LLM | `qwen2.5:7b` (Ollama), temperature 0 (K-33) | Yerel; Türkçe konuşabiliyor; 4-bit ~4,7 GB ile 16 GB RAM'e sığıyor. Yedek ad `qwen2.5:3b` yalnızca config'te durur, birincil model kurulu değilse denenir (bu makinede kurulu değil, denenmedi) |
 | Vector store | FAISS `IndexFlatIP`, L2-normalize vektörler (= kosinüs) | Yerel; KB 52 chunk olduğu için kesin (flat) arama yeterli; seed 42 |
 
 Model karşılaştırması yapılmadı (kullanıcı kararı). Başka bir embedding veya LLM denenmedi; "bge-m3 en iyisi" iddiası yoktur, yalnızca gerekçeli bir seçimdir.
@@ -68,8 +68,37 @@ flags         : ["llm_unavailable"]   # LLM yoksa
 ```
 Dayanıklılık: Ollama kapalıysa veya LLM kurulu değilse retrieval sonucu `answer=null` ve `llm_unavailable` ile döner (çökme yok). Embedding modeli yoksa `EmbeddingUnavailableError`, indeks yoksa `IndexNotBuiltError` (mesaj `make rag-index` der). Timeout'lar `configs/rag.yaml` içindedir. Retry yoktur.
 
+## Güvenilirlik katmanları (K-33, ek tur)
+İlk sürümde 7B model bağlam dışı ifade uydurmuş ve KB'de olmayan bir soruya yanlış bir sayı vermişti (aşağıdaki "ilk sürüm" notları). Bunun üzerine kullanıcı kararıyla üç önlem eklendi:
+1. **Few-shot ve temperature 0:** sistem mesajına bir "bilgi yok" ve bir "bilgi var" örneği eklendi; talimat "bilgi tabanında bu konuda bilgi yok" cümlesini istiyor.
+2. **Abstain eşiği:** sorunun en iyi SEMANTİK kosinüs skoru `retrieval.abstain_threshold` (0,45) altındaysa LLM çağrılmaz. Skor, filtresiz aramanın en iyisidir; tetiklenen kural kartları metadata ile öne alınsa bile bu skoru etkilemez (hibrit etkileşimi: kartlar abstain'i gizleyemez, testle doğrulanır). Açıklanan işlem (`explanation`) verilse de aynı soru-skor kuralı geçerlidir.
+3. **Kaynak kontrolü:** cevapta geçen `[...#...]` id'lerinin hepsi getirilen chunk'lardan olmalı ve en az biri bulunmalı; yoksa `grounded=false` ve cevaba uyarı eklenir. LLM'in kendisi "bilgi yok" derse `abstained=true` olur ve eklediği kaynaklar atılır.
+
+`RAGAnswer` yeni alanlar: `abstained`, `grounded`, `top_score`, `warning`. Bu bayraklarla Adım 9'da RAG cevabı "destek bilgisi" olarak etiketlenir; karar kural motorunda kalır.
+
+### Eşik seçimi: skor dağılımı (etiketle ilgisi yok)
+13 soru (10 KB-içi + 3 KB-dışı, `tests/rag/retrieval_questions.yaml`), her biri için filtresiz en iyi kosinüs:
+
+| Skor | Tür | Soru |
+|---|---|---|
+| 0,341 | KB-dışı | Türkiye'nin başkenti neresidir? |
+| 0,533 | KB-içi | small_amt_streak_1h feature'ı neyi ölçer? |
+| 0,561 | KB-dışı | Kuralların holdout'taki toplam fraud yakalama oranı nedir? |
+| 0,596 | KB-dışı | Kredi kartı faiz oranları bankalarda nasıl hesaplanır? |
+| 0,623-0,687 | KB-içi (9 soru) | diğer dokuz soru |
+
+Dağılımlar örtüşüyor: en düşük KB-içi skor (0,533, kısa ve İngilizce tanımlayıcılı soru) iki KB-dışı sorunun altında. Tek eşik ikisini ayıramaz. Seçenekler: 0,45 (yanlış abstain 0/10, doğru abstain 1/3) veya 0,60 (doğru abstain 3/3, yanlış abstain 1/10, ama 13 soruya uydurulmuş ve 0,596'ya razor-thin). **0,45 seçildi**: geçerli bir analist sorusunu reddetmemek, yakın konulu KB-dışı soruları kaçırmaktan daha kötü kabul edildi; kaçanlar ikinci hatta (few-shot, LLM'in kendi cevabı, kaynak kontrolü) yakalanıyor. Örnek sayısı çok küçüktür; eşik bağımsız bir sette doğrulanmadı.
+
+| Ölçüt (eşik 0,45) | Değer |
+|---|---|
+| Doğru abstain (eşik, LLM'siz) | 1/3 = 0,33 |
+| Yanlış abstain (KB-içi soruyu reddetme) | 0/10 = 0,00 |
+| Uçtan uca doğru abstain (eşik + LLM'in kendi "bilgi yok" cevabı, gerçek model) | 3/3 |
+
+Uçtan uca: Türkiye sorusu eşikte (LLM çağrılmadı, 0,2 sn); faiz oranı ve holdout yakalama oranı soruları eşiği geçti, `qwen2.5:7b` "Bilgi tabanında bu konuda bilgi yok" dedi (`abstained=true`). Her ikisinde model ayrıca ilgisiz kaynak id'leri eklemişti; servis bunları siler.
+
 ## Gerçek çalıştırma: örnek sorgular
-Aşağıdakiler bu makinede gerçek indeks, `bge-m3` ve `qwen2.5:7b` ile alınmış çıktılardır (temperature 0,1; her cevap 16-34 sn sürdü). Cevap metinleri aynen alınmıştır (yalnızca satır başları boşluğa çevrildi).
+**İlk sürüm** çıktıları (temperature 0,1, güvenilirlik katmanları öncesi); ardından aynı soruların ek tur sonrası sonuçları verilmiştir. Aşağıdakiler bu makinede gerçek indeks, `bge-m3` ve `qwen2.5:7b` ile alınmış çıktılardır (temperature 0,1; her cevap 16-34 sn sürdü). Cevap metinleri aynen alınmıştır (yalnızca satır başları boşluğa çevrildi).
 
 **1) Hibrit: işlem açıklaması + soru** (tetiklenen kurallar R04 ve R06; kural motoru çıktısı elle oluşturulmuş örnek bir `explain_dict`)
 - Soru: "Neden bu işlem review aldı ve analist ne yapmalı?"
@@ -94,16 +123,21 @@ Aşağıdakiler bu makinede gerçek indeks, `bge-m3` ve `qwen2.5:7b` ile alınm�
 
 Örnek 1 ve 4, modelin doğruluğunun garanti olmadığını gösterir; çıktı analiste destek bilgisidir, karar kural motorundadır.
 
+**Ek tur sonrası yeniden deneme (temperature 0, few-shot, kaynak kontrolü; aynı soru ve aynı sahte explain_dict):**
+- Örnek 4 ("holdout'taki fraud yakalama oranı"): artık "Bilgi tabanında bu konuda bilgi yok" (`abstained=true`). Model hâlâ üç ilgisiz id eklemişti; servis cevabı temizledi. İlk sürümdeki yanlış sayı ("%3,1") tekrarlanmadı. Tek bir soru ve tek koşudur; genel bir kanıt değildir.
+- Örnek 1: "Aristoteles" ifadesi kayboldu, kaynaklar doğru, `grounded=true`. İçerik büyük ölçüde operasyon rehberi ve işlem açıklamasıyla uyumlu (kart yaşı 0, geçmiş 12 işlem açıklamadan geliyor); ilk cümle bozuk kurulmuş. `grounded=true` yalnızca "kaynak id'leri getirilenlerden" demektir, içerik doğruluğu değildir.
+- Örnek 2 ve 3: `grounded=true`, içerik bağlamla uyumlu; ikinci örnekte ("neden riskli") modelin "entity'nin geçmiş hareketleri daha az etkilidir" cümlesi KB'de yoktur (hafif uydurma), kaynak kontrolü bunu yakalayamaz.
+
 ## Retrieval doğruluğu: hit@k (gerçek indeks)
 `tests/rag/retrieval_questions.yaml`: 10 soru, her biri için beklenen bir kural ID'si ve/veya belge türü (veya tek bir chunk id). Sorular sonuçlar görülmeden yazıldı ve sonuçlara bakılarak değiştirilmedi. Arama saf semantiktir (filtresiz, metadata kotası kapalı). Test: `pytest -m ollama -s` (indeks `artifacts/rag/` yoksa veya Ollama kapalıysa atlanır; varsayılan `make test` içinde koşmaz). Eşik (hit@5 >= 0,7) ilk çalıştırmadan önce belirlendi.
 
 | k | hit@k |
 |---|---|
-| 1 | 0,80 (8/10) |
+| 1 | 0,80 (8/10, yalnızca KB-içi 10 soru) |
 | 3 | 1,00 (10/10) |
 | 5 | 1,00 (10/10) |
 
-hit@1 kaçıran iki soru: "Kart testi şüphesi hangi koşulda tetiklenir?" (beklenen R01 kartı 3. sırada; önce `typologies#card-testing-kart-testi` ve operasyon rehberi geldi) ve "Velocity patlaması kuralı aynı entity için neden bir saatte en fazla bir kez tetiklenir?" (R03 kartı 2. sırada; önce `typologies#velocity-burst-hiz-ve-patlama` geldi). İkisinde de ilk gelen chunk konu olarak ilgili (tipoloji); beklenen kural kartı daha aşağıda kaldı. Ölçüt kural kartını beklediği için bunlar kaçırma sayıldı. Hibrit modda (tetiklenen kural ID'si verilince) R01/R03 kartı kotayla zaten en öne alınır.
+Doğru/yanlış abstain oranları yukarıda (eşik tablosu). hit@1 kaçıran iki soru: "Kart testi şüphesi hangi koşulda tetiklenir?" (beklenen R01 kartı 3. sırada; önce `typologies#card-testing-kart-testi` ve operasyon rehberi geldi) ve "Velocity patlaması kuralı aynı entity için neden bir saatte en fazla bir kez tetiklenir?" (R03 kartı 2. sırada; önce `typologies#velocity-burst-hiz-ve-patlama` geldi). İkisinde de ilk gelen chunk konu olarak ilgili (tipoloji); beklenen kural kartı daha aşağıda kaldı. Ölçüt kural kartını beklediği için bunlar kaçırma sayıldı. Hibrit modda (tetiklenen kural ID'si verilince) R01/R03 kartı kotayla zaten en öne alınır.
 
 Yorum sınırı: 10 soru küçük bir örnektir ve soruları bilgi tabanını yazan geliştirici hazırladı; bu yüzden hit@k iyimser bir tahmindir. Bağımsız bir soru kümesiyle ölçülmedi. Sorgu yeniden yazma, reranker ve çok-chunk cevaplar ölçülmedi.
 
@@ -115,7 +149,7 @@ Yorum sınırı: 10 soru küçük bir örnektir ve soruları bilgi tabanını ya
 | `knowledge_base/` | elle yazılan 3 belge, `generated/` (otomatik 2 belge), `sources/rule_notes.yaml` |
 | `artifacts/rag/` | `index.faiss`, `chunks.jsonl` (gitignore'da; `make rag-index` ile üretilir) |
 | `scripts/build_rag_index.py` | KB üret -> chunk'la -> embed et -> kaydet -> örnek sorgu (+ LLM cevabı) |
-| `tests/rag/` | 41 birim testi (Ollama'sız) + 1 `ollama` işaretli gerçek retrieval testi |
+| `tests/rag/` | 50 birim testi (Ollama'sız) + 1 `ollama` işaretli gerçek retrieval/abstain testi |
 
 Container (yalnızca ekleme): `rag_settings`, `embedder`, `llm_client`, `vector_store`, `retriever`, `prompt_builder`, `rag_service` (hepsi Singleton). `vector_store` ilk çözümlemede indeksi yükler; indeks yoksa `IndexNotBuiltError`. Testlerde `container.embedder.override(...)` ile değiştirilir.
 
@@ -125,7 +159,7 @@ Container (yalnızca ekleme): `rag_settings`, `embedder`, `llm_client`, `vector_
 - Varsayılan testler: `make test` (Ollama gerekmez).
 
 ## Bilinen sınırlar
-- **LLM güvenilirliği:** 7B yerel model talimatı her zaman izlemiyor: bağlam dışı ifade uydurdu (örnek 1) ve bilgi olmayan soruda "bilgi yok" demek yerine ilgisiz bir sayı verdi (örnek 4). Kaynak id'leri her çalıştırmada yazıldı, ama bir id'nin yazılması cevabın doğru olduğunu göstermez (`cited_ids` yalnızca metinde geçen id'leri listeler, içerik doğrulaması yapmaz). Cevap otomasyonu için kullanılmamalıdır.
+- **LLM güvenilirliği (ek turda azaltıldı, çözülmedi):** abstain eşiği ve kaynak kontrolü uydurmayı ve KB-dışı soruları azaltır, içerik doğruluğunu garanti etmez. 7B yerel model talimatı her zaman izlemiyor: bağlam dışı ifade uydurdu (örnek 1) ve bilgi olmayan soruda "bilgi yok" demek yerine ilgisiz bir sayı verdi (örnek 4). Kaynak id'leri her çalıştırmada yazıldı, ama bir id'nin yazılması cevabın doğru olduğunu göstermez (`cited_ids` yalnızca metinde geçen id'leri listeler, içerik doğrulaması yapmaz). Cevap otomasyonu için kullanılmamalıdır.
 - **Gecikme:** cevap başına 16-34 sn (7B model, CPU/Apple Silicon, ilk çağrıda model yükleme dahil). API'de zaman aşımı ve eşzamanlılık Adım 10'da ele alınmalı.
 - **Bilgi tabanı ölçeği ve dili:** 52 chunk, tek dil (Türkçe). Kural config'indeki `description` alanı İngilizcedir ve kartlarda "(config, İngilizce)" olarak yer alır.
 - **`rule_notes.yaml` elle bakım:** kart gövdesi config'ten otomatik üretilir, ama gerekçe ve sınır sayıları elle girilir; `step7.md` yeniden hesaplanırsa güncellenmelidir. Çok sayıda sayı (precision/lift) holdout'a ve post-hoc incelemeye dayanır (K-24, K-25).
@@ -137,5 +171,6 @@ Container (yalnızca ekleme): `rag_settings`, `embedder`, `llm_client`, `vector_
 
 ## Bir sonraki adımın girdisi (Adım 9: agent'lar)
 - `Container.rag_service().answer(question, explanation=rule_engine_result.explain_dict())`: tetiklenen kural ID'leri `explanation["triggered_rules"]`'dan okunur ve hibrit retrieval'e filtre olur.
+- RAG cevabı agent çıktısında "destek bilgisi" olarak etiketlenir; karar kural motorunda kalır (K-33). `abstained` ve `grounded` bayrakları güven düzeyini taşır.
 - `RAGAnswer.flags` içindeki `llm_unavailable`, agent'ın retrieval-only yanıta düşmesi için sinyaldir.
 - İndeks `make rag-index` ile üretilmeli (`artifacts/rag/` repoda yoktur).

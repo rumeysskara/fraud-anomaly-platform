@@ -57,7 +57,15 @@ class Container(containers.DeclarativeContainer):
         HybridRetriever, embedder, vector_store, rag_settings.provided.retrieval
     )
     prompt_builder = providers.Singleton(PromptBuilder, rag_settings.provided.prompt)
-    rag_service = providers.Singleton(RAGService, retriever, llm_client, prompt_builder)
+    rag_service = providers.Singleton(
+        RAGService,
+        retriever,
+        llm_client,
+        prompt_builder,
+        abstain_threshold=rag_settings.provided.retrieval.abstain_threshold,
+        abstain_answer=rag_settings.provided.prompt.abstain_answer,
+        ungrounded_warning=rag_settings.provided.prompt.ungrounded_warning,
+    )
 
 
 def create_container() -> Container:

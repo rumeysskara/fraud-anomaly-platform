@@ -21,7 +21,7 @@ llm:
   model: qwen2.5:7b
   fallback_model: qwen2.5:3b     # tried only when the primary model is not installed
   timeout_seconds: 180
-  temperature: 0.1
+  temperature: 0.0
   num_ctx: 8192
 
 chunking:
@@ -32,16 +32,27 @@ chunking:
 
 retrieval:
   k: 4
+  abstain_threshold: 0.45        # best SEMANTIC cosine below this => no LLM call (docs/step8.md)
   metadata_quota: 2              # slots reserved for chunks matching the triggered rule ids
   rule_filter_doc_types: [rule_card, context_card]   # doc types preferred by the rule-id filter
 
 prompt:
   system: >-
     Sen bir dolandırıcılık analizi asistanısın. YALNIZCA aşağıdaki BAĞLAM bölümündeki bilgilere
-    dayanarak Türkçe cevap ver. Cevap bağlamda yoksa aynen "Bilgi tabanında bu bilgi yok."
-    de; tahmin etme, kural, eşik veya sayı uydurma. Kullandığın her bilgi için kaynak chunk
+    dayanarak Türkçe cevap ver. Sorunun cevabı bağlamda açıkça yoksa yalnızca şunu yaz:
+    "Bilgi tabanında bu konuda bilgi yok." Tahmin etme; bağlamda geçmeyen kural, eşik, sayı veya
+    ifade uydurma; bir sayıyı ancak sorulan şeyin aynısıysa kullan. Kullandığın her bilgi için kaynak chunk
     ID'sini köşeli parantez içinde belirt, örneğin [rule_cards#r01-card-testing]. Cevabı kısa
     ve net tut.
+  few_shot: >-
+    ÖRNEK (bağlamda cevap yok):
+    Soru: Kuralların toplam doğruluk oranı yüzde kaçtır?
+    Cevap: Bilgi tabanında bu konuda bilgi yok.
+    ÖRNEK (bağlamda cevap var):
+    Soru: R01 hangi kararı verir?
+    Cevap: R01 block kararı verir. [rule_cards#r01-card-testing]
+  abstain_answer: "Bilgi tabanında bu konuda bilgi yok"
+  ungrounded_warning: "UYARI: Bu cevap getirilen kaynaklarla doğrulanamadı; destek bilgisi olarak değerlendirmeyin."
   context_header: "BAĞLAM (kaynak chunk'lar):"
   passage: "[{chunk_id}] {heading}\n{text}"
   no_context: "(İlgili bağlam bulunamadı.)"

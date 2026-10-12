@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -37,6 +38,13 @@ class RAGAnswer(BaseModel):
     cited_ids: list[str] = Field(default_factory=list)
     used_context: list[str] = Field(default_factory=list)
     flags: list[str] = Field(default_factory=list)
+    abstained: bool = False  # True: no answer from the knowledge base (LLM may not have run)
+    grounded: bool = False  # True: the answer cites only retrieved chunks, and at least one
+    top_score: float | None = None  # best unfiltered semantic cosine of the question
+    warning: str | None = None
+
+
+CITATION = re.compile(r"\[([^\[\]\s]+#[^\[\]\s]+)\]")
 
 
 class RAGService:
@@ -46,10 +54,21 @@ class RAGService:
     degrades to a retrieval-only answer with the 'llm_unavailable' flag.
     """
 
-    def __init__(self, retriever: Retriever, llm: LLMClient, prompt_builder: PromptBuilder) -> None:
+    def __init__(
+        self,
+        retriever: Retriever,
+        llm: LLMClient,
+        prompt_builder: PromptBuilder,
+        abstain_threshold: float = 0.0,
+        abstain_answer: str = "Bilgi tabanında bu konuda bilgi yok",
+        ungrounded_warning: str = "",
+    ) -> None:
         self.retriever = retriever
         self.llm = llm
         self.prompt_builder = prompt_builder
+        self.abstain_threshold = abstain_threshold
+        self.abstain_answer = abstain_answer
+        self.ungrounded_warning = ungrounded_warning
 
     def answer(
         self,
@@ -68,6 +87,17 @@ class RAGService:
             chunks = self.retriever.retrieve(question, filters=filters)
         else:
             chunks = self.retriever.retrieve(question, k, filters)
+        top_score = chunks[0].metadata.get("top_semantic_score", 0.0) if chunks else 0.0
+        if self.abstain_threshold > 0 and top_score < self.abstain_threshold:
+            # Off-topic question: the best semantic match is too weak, do not call the LLM.
+            # The top score ignores metadata-boosted rule cards, so they cannot mask this.
+            return RAGAnswer(
+                question=question,
+                answer=self.abstain_answer,
+                sources=[],
+                abstained=True,
+                top_score=round(top_score, 4),
+            )
         sources = [_source(c) for c in chunks]
         used = [c.text for c in chunks]
         context = self.prompt_builder.build_context(chunks)
@@ -82,10 +112,41 @@ class RAGService:
                 sources=sources,
                 used_context=used,
                 flags=[LLM_UNAVAILABLE],
+                top_score=round(top_score, 4),
             )
-        cited = [s.chunk_id for s in sources if text and s.chunk_id in text]
+        return self._check(question, text or "", sources, used, top_score)
+
+    def _check(
+        self, question: str, text: str, sources: list[SourceRef], used: list[str], top: float
+    ) -> RAGAnswer:
+        """Source check: every cited id must be a retrieved chunk and at least one is cited."""
+        retrieved = {s.chunk_id for s in sources}
+        cited = list(dict.fromkeys(CITATION.findall(text)))
+        unknown = [c for c in cited if c not in retrieved]
+        abstained = self.abstain_answer.lower() in text.lower()
+        grounded = bool(cited) and not unknown and not abstained
+        warning = None
+        if not grounded and not abstained:
+            warning = self.ungrounded_warning or "ungrounded answer"
+            text = f"{text}\n\n{warning}"
+        if abstained:  # the model refused: drop any leftover citations
+            return RAGAnswer(
+                question=question,
+                answer=self.abstain_answer,
+                sources=[],
+                abstained=True,
+                top_score=round(top, 4),
+            )
         return RAGAnswer(
-            question=question, answer=text, sources=sources, cited_ids=cited, used_context=used
+            question=question,
+            answer=text,
+            sources=sources,
+            cited_ids=[c for c in cited if c in retrieved],
+            used_context=used,
+            abstained=False,
+            grounded=grounded,
+            top_score=round(top, 4),
+            warning=warning,
         )
 
 

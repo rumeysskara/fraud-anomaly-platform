@@ -34,6 +34,10 @@ class HybridRetriever(Retriever):
         rule_ids: list[str] = list(filters.get("rule_ids") or [])
         doc_types = set(filters.get("doc_types") or [])
         query_vector = self.embedder.embed([query])[0]
+        # Unfiltered best cosine: abstain decisions use this, so metadata-boosted cards
+        # cannot hide an off-topic question.
+        top = self.store.search(query_vector, 1)
+        top_score = top[0].score if top else 0.0
 
         def allowed(chunk: Chunk) -> bool:
             return not doc_types or chunk.metadata.get("doc_type") in doc_types
@@ -48,7 +52,7 @@ class HybridRetriever(Retriever):
             if chunk.metadata["chunk_id"] not in seen and len(picked) < k:
                 seen.add(chunk.metadata["chunk_id"])
                 picked.append(self._tag(chunk, "semantic"))
-        return picked
+        return [self._with_top(c, top_score) for c in picked]
 
     def _metadata_hits(self, query_vector: Any, rule_ids: list[str], allowed: Any) -> list[Chunk]:
         """Best preferred-type chunk per triggered rule id, limited to the metadata quota."""
@@ -65,6 +69,13 @@ class HybridRetriever(Retriever):
 
             hits.extend(self.store.search(query_vector, 1, matches))
         return hits
+
+    @staticmethod
+    def _with_top(chunk: Chunk, top_score: float) -> Chunk:
+        """Copy of the chunk carrying the query's best unfiltered semantic score."""
+        return chunk.model_copy(
+            update={"metadata": {**chunk.metadata, "top_semantic_score": top_score}}
+        )
 
     @staticmethod
     def _tag(chunk: Chunk, how: str) -> Chunk:

@@ -29,7 +29,8 @@ class PromptBuilder:
             )
         else:
             passages = cfg.no_context
-        return f"{cfg.system}\n\n{cfg.context_header}\n{passages}"
+        shots = f"\n\n{' '.join(cfg.few_shot.split())}" if cfg.few_shot else ""
+        return f"{cfg.system}{shots}\n\n{cfg.context_header}\n{passages}"
 
     def build_user(self, question: str, explanation: dict[str, Any] | None = None) -> str:
         """User text: optional rule engine result, then the question."""

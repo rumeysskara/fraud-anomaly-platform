@@ -53,6 +53,7 @@ class RetrievalConfig(BaseModel):
 
     k: int = 4
     metadata_quota: int = 2
+    abstain_threshold: float = 0.0
     rule_filter_doc_types: list[str] = Field(default_factory=list)
 
 
@@ -66,6 +67,9 @@ class PromptConfig(BaseModel):
     explanation_header: str
     question_header: str
     answer_reminder: str = ""
+    few_shot: str = ""
+    abstain_answer: str = "Bilgi tabanında bu konuda bilgi yok"
+    ungrounded_warning: str = ""
     explanation_keys: list[str] = Field(default_factory=list)
 
 

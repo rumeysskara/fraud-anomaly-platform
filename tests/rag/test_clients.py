@@ -88,3 +88,29 @@ def test_llm_unavailable_when_no_model_or_server() -> None:
 
     with pytest.raises(LLMUnavailableError, match="unreachable"):
         OllamaLLMClient(LLM, client(down)).generate("q")
+
+
+def test_few_shot_is_part_of_the_system_context() -> None:
+    from src.rag.config import PromptConfig
+    from src.rag.prompt import PromptBuilder
+
+    cfg = PromptConfig(
+        system="S",
+        context_header="B",
+        passage="{chunk_id}",
+        no_context="-",
+        explanation_header="E",
+        question_header="Q",
+        few_shot="ÖRNEK soru cevap",
+    )
+    assert "ÖRNEK soru cevap" in PromptBuilder(cfg).build_context([])
+
+
+def test_real_config_uses_temperature_zero_and_abstain_threshold() -> None:
+    from src.rag.config import load_rag_settings
+
+    settings = load_rag_settings()
+    assert settings.llm.temperature == 0.0
+    assert 0 < settings.retrieval.abstain_threshold < 1
+    assert "Bilgi tabanında bu konuda bilgi yok" in settings.prompt.system
+    assert settings.prompt.few_shot
