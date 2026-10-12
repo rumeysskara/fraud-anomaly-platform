@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import httpx
 from dependency_injector import containers, providers
 
 from src.agents.bus import MessageBus
 from src.agents.config import load_agent_settings
 from src.agents.factory import AgentFactory, build_planner_llm, create_coordinator
 from src.agents.planner import Planner
+from src.api.config import agent_settings_for_api, load_api_settings
+from src.api.health import HealthService
+from src.api.online import OnlineScorer
+from src.api.services import ExplainService, RagQueryService
 from src.context.factory import load_engine
 from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
 from src.features.pipeline import FeaturePipeline
@@ -88,6 +93,38 @@ class Container(containers.DeclarativeContainer):
         planner,
     )
     coordinator = providers.Singleton(create_coordinator, agent_factory)
+
+    # Step 10: API. `online_scorer` holds the online entity history (loaded from artifacts/, one
+    # process, in memory). The API agent flow is a second, separate bus + agents built from the
+    # same services with the API's LLM deadline (configs/api.yaml, default 60 s); the Step 9
+    # `coordinator` above stays unchanged for scripts and demos.
+    api_settings = providers.Singleton(load_api_settings, CONFIG_DIR)
+    online_scorer = providers.Singleton(
+        OnlineScorer, feature_pipeline, scoring_service, context_adjuster, rule_engine, api_settings
+    )
+    api_agents_settings = providers.Singleton(agent_settings_for_api, agents_settings, api_settings)
+    api_message_bus = providers.Singleton(MessageBus, agents_settings.provided.bus.max_depth)
+    api_planner_llm = providers.Singleton(
+        build_planner_llm, rag_settings.provided.llm, api_agents_settings
+    )
+    api_planner = providers.Singleton(Planner, api_planner_llm, api_agents_settings)
+    api_agent_factory = providers.Singleton(
+        AgentFactory,
+        api_message_bus,
+        api_agents_settings,
+        scoring_service,
+        context_adjuster,
+        rule_engine,
+        rag_service,
+        api_planner,
+    )
+    api_coordinator = providers.Singleton(create_coordinator, api_agent_factory)
+    explain_service = providers.Singleton(ExplainService, online_scorer, api_coordinator)
+    rag_query_service = providers.Singleton(RagQueryService, rag_service, api_settings)
+    health_http_client = providers.Singleton(httpx.Client)
+    health_service = providers.Singleton(
+        HealthService, online_scorer.provider, rag_settings, api_settings, health_http_client
+    )
 
 
 def create_container() -> Container:

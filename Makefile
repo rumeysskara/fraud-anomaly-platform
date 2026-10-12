@@ -1,6 +1,6 @@
 PY ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: install lint format test profile features score pipeline index rag-index agents-demo api
+.PHONY: install lint format test profile features score context rules pipeline rag-index agents-demo api
 
 install:
 	$(PY) -m pip install -r requirements.txt
@@ -25,11 +25,14 @@ features:
 score:
 	$(PY) scripts/run_pipeline.py --only score
 
+context:
+	$(PY) scripts/run_pipeline.py --only context
+
+rules:
+	$(PY) scripts/run_pipeline.py --only rules
+
 pipeline:
 	$(PY) scripts/run_pipeline.py
-
-index:
-	$(PY) scripts/run_pipeline.py --only index
 
 rag-index:
 	$(PY) scripts/build_rag_index.py
@@ -38,4 +41,4 @@ agents-demo:
 	$(PY) scripts/run_agents_demo.py
 
 api:
-	$(PY) -m uvicorn src.api.main:app --reload
+	$(PY) -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000

@@ -1,4 +1,6 @@
-"""Run pipeline steps in order. Steps whose script does not exist yet are skipped."""
+"""Run the batch pipeline (Steps 1-7) in order: profile, features, score, context, rules.
+
+The RAG index (`make rag-index`, needs Ollama), the agents demo and the API are separate."""
 
 from __future__ import annotations
 
@@ -13,15 +15,15 @@ sys.path.insert(0, str(ROOT))
 
 from src.core.config import set_seed  # noqa: E402
 
-# step name -> script (written by later steps)
+# step name -> script
 STEPS: dict[str, str] = {
     "profile": "scripts/run_profiling.py",
     "features": "scripts/build_features.py",
     "score": "scripts/run_scoring.py",
     "context": "scripts/run_context.py",
     "rules": "scripts/run_rules.py",
-    "index": "scripts/build_index.py",
 }
+# Not part of `make pipeline`: needs a running Ollama (make rag-index) or is a demo/service.
 
 log = logging.getLogger("pipeline")
 
@@ -39,8 +41,8 @@ def main() -> int:
             continue
         path = ROOT / script
         if not path.exists():
-            log.info("skip %s: %s not written yet", name, script)
-            continue
+            log.error("step %s: %s does not exist", name, script)
+            return 2
         log.info("run %s", name)
         result = subprocess.run([sys.executable, str(path)], cwd=ROOT)
         if result.returncode != 0:
