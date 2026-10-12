@@ -1,0 +1,57 @@
+# Step 9 - runtime agents (src/agents). Roles, default workflow, planner and timeouts live here.
+# Decisions: docs/decisions.md K-34...  The fraud label is never used.
+
+# Allowed agents and the intents each one accepts. The planner may only use these.
+roles:
+  anomaly:
+    description: "Step 4-5 anomaly layers: layer scores and the normalized aggregate score."
+    intents: [score]
+  context:
+    description: "Step 6 context-aware score adjustment: which C rules changed the score."
+    intents: [adjust]
+  rule:
+    description: "Step 7 rule engine: final decision, triggered and suppressed rules."
+    intents: [evaluate]
+  explainer:
+    description: "Step 8 RAG: analyst explanation (supporting information, never the decision)."
+    intents: [explain]
+
+workflow:
+  # Deterministic plan used when no question is given and as the fallback of the LLM plan.
+  default_plan:
+    - {agent: anomaly, intent: score}
+    - {agent: context, intent: adjust}
+    - {agent: rule, intent: evaluate}
+    - {agent: explainer, intent: explain}
+  # This step must be in every plan; the decision comes only from it.
+  required_step: {agent: rule, intent: evaluate}
+
+bus:
+  max_depth: 6          # delegation depth limit (protects against loops)
+
+planner:
+  enabled: true
+  timeout_seconds: 60   # hard deadline for the plan call (also the HTTP timeout of the planner client)
+  max_steps: 6
+  prompt: |
+    You plan which agents to run for a fraud analyst request. Reply with JSON only, no text.
+    Agents and intents:
+    {catalog}
+    Rules: use only the agents and intents above, at most once each, in this order:
+    anomaly, context, rule, explainer. The step rule:evaluate is mandatory (it makes the
+    decision). Add explainer:explain only if the analyst asks for an explanation or a note.
+    Leave out anomaly and context if the analyst asks only for the decision (rule fetches
+    what it needs by itself).
+    JSON format: {{"steps": [{{"agent": "rule", "intent": "evaluate"}}]}}
+
+rule:
+  # K-35: the demo and the agents never write the online cooldown store. A transaction that is
+  # analysed (possibly several times, or with an experimental question) must not change the
+  # state later requests see. A separate "record transaction" path (future work) writes it.
+  update_state: false
+
+explainer:
+  timeout_seconds: 240  # hard deadline for retrieval + generation (RAG takes 16-34 s locally)
+  label: "destek bilgisi"
+  default_question: >-
+    Bu işlem neden bu karara ulaştı? Tetiklenen kuralların anlamı ve analistin bakması gerekenler nelerdir?

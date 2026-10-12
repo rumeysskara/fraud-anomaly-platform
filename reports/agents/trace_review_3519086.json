@@ -1,0 +1,190 @@
+{
+  "question": "TransactionID 3519086 işlemini incele ve bir inceleme notu yaz.",
+  "correlation_id": "5d56bc7cc61e4a738671939f9569f33b",
+  "transaction_id": 3519086,
+  "status": "ok",
+  "decision": "review",
+  "decision_source": "score",
+  "final_score": 1.0,
+  "anomaly_score": 0.8988509212184005,
+  "adjusted_score": 1.0,
+  "layer_scores": {
+    "multivariate": 0.9131835746458377,
+    "entity": 0.987846902067225,
+    "column": 0.9786460613452583,
+    "temporal": 0.00154877698476446
+  },
+  "context_rules": [
+    "C6a"
+  ],
+  "triggered_rules": [],
+  "suppressed_rules": [],
+  "reasons": [
+    "Karar kuralı tetiklenmedi; skor 1.079 inceleme eşiğinin (1.070) üzerinde."
+  ],
+  "explanation": {
+    "label": "destek bilgisi",
+    "affects_decision": false,
+    "text": "Kaynaklar: [rule_cards#r07-first-transaction-high-amount] [operations_guide#review-karari-manuel-inceleme]",
+    "sources": [
+      {
+        "chunk_id": "rule_cards#r07-first-transaction-high-amount",
+        "heading": "Kural Kartları (kural motoru, Adım 7) > R07 - first_transaction_high_amount",
+        "doc_type": "rule_card",
+        "rule_ids": [
+          "R07"
+        ],
+        "score": 0.5209,
+        "retrieval": "semantic"
+      },
+      {
+        "chunk_id": "operations_guide#review-karari-manuel-inceleme",
+        "heading": "Operasyon Rehberi (Analist) > Review kararı (manuel inceleme)",
+        "doc_type": "operations",
+        "rule_ids": [
+          "R03",
+          "R04",
+          "R05",
+          "R06",
+          "R07",
+          "R08",
+          "R09",
+          "R11",
+          "R12"
+        ],
+        "score": 0.5129,
+        "retrieval": "semantic"
+      },
+      {
+        "chunk_id": "context_cards#c4-trusted-entity",
+        "heading": "Context Kuralları (skor düzeltme, Adım 6) > C4 - trusted_entity",
+        "doc_type": "context_card",
+        "rule_ids": [
+          "C4"
+        ],
+        "score": 0.5048,
+        "retrieval": "semantic"
+      },
+      {
+        "chunk_id": "operations_guide#kural-bazli-ilk-kontroller-yuksek-tutar-yabanci-ulke-yeni-kart",
+        "heading": "Operasyon Rehberi (Analist) > Kural bazlı ilk kontroller: yüksek tutar, yabancı ülke, yeni kart",
+        "doc_type": "operations",
+        "rule_ids": [
+          "R02",
+          "R04",
+          "R05",
+          "R07",
+          "R08",
+          "R11",
+          "R12"
+        ],
+        "score": 0.5024,
+        "retrieval": "semantic"
+      }
+    ],
+    "cited_ids": [
+      "rule_cards#r07-first-transaction-high-amount",
+      "operations_guide#review-karari-manuel-inceleme"
+    ],
+    "grounded": true,
+    "abstained": false,
+    "flags": [],
+    "warning": null
+  },
+  "plan": {
+    "source": "llm",
+    "steps": [
+      "rule:evaluate",
+      "explainer:explain"
+    ],
+    "fallback_reason": null,
+    "duration_ms": 4568.22
+  },
+  "errors": [],
+  "total_ms": 25033.06,
+  "trace": [
+    {
+      "seq": 1,
+      "message_id": "6a9537c8d9f745f28c86a5d52f279f33",
+      "parent_id": null,
+      "sender": "client",
+      "recipient": "coordinator",
+      "intent": "analyze",
+      "status": "ok",
+      "duration_ms": 25033.44,
+      "timestamp": "2026-10-12T04:32:28.949134Z",
+      "payload_keys": [
+        "question",
+        "record"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 2,
+      "message_id": "7ffe9c8eeeed4199b02796001380149b",
+      "parent_id": "6a9537c8d9f745f28c86a5d52f279f33",
+      "sender": "coordinator",
+      "recipient": "rule",
+      "intent": "evaluate",
+      "status": "ok",
+      "duration_ms": 109.39,
+      "timestamp": "2026-10-12T04:32:33.517780Z",
+      "payload_keys": [
+        "adjusted_score",
+        "adjusted_score_unclipped",
+        "anomaly_score",
+        "layer_scores",
+        "record"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 3,
+      "message_id": "927e416288004186b5634dde6b97ae8d",
+      "parent_id": "7ffe9c8eeeed4199b02796001380149b",
+      "sender": "rule",
+      "recipient": "context",
+      "intent": "adjust",
+      "status": "ok",
+      "duration_ms": 99.59,
+      "timestamp": "2026-10-12T04:32:33.518200Z",
+      "payload_keys": [
+        "anomaly_score",
+        "layer_scores",
+        "record"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 4,
+      "message_id": "fa1653fd54b0440eb06d211419534287",
+      "parent_id": "927e416288004186b5634dde6b97ae8d",
+      "sender": "context",
+      "recipient": "anomaly",
+      "intent": "score",
+      "status": "ok",
+      "duration_ms": 91.81,
+      "timestamp": "2026-10-12T04:32:33.518530Z",
+      "payload_keys": [
+        "record"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 5,
+      "message_id": "9c03fc657ab74fa785f8e425545be9f5",
+      "parent_id": "6a9537c8d9f745f28c86a5d52f279f33",
+      "sender": "coordinator",
+      "recipient": "explainer",
+      "intent": "explain",
+      "status": "ok",
+      "duration_ms": 20354.28,
+      "timestamp": "2026-10-12T04:32:33.627268Z",
+      "payload_keys": [
+        "question",
+        "rule_result"
+      ],
+      "detail": null
+    }
+  ]
+}

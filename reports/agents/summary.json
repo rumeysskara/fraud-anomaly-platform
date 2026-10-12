@@ -1,0 +1,94 @@
+[
+  {
+    "transaction_id": 3522622,
+    "plan": {
+      "source": "default",
+      "steps": [
+        "anomaly:score",
+        "context:adjust",
+        "rule:evaluate",
+        "explainer:explain"
+      ],
+      "fallback_reason": null,
+      "duration_ms": 0.0
+    },
+    "decision": "block",
+    "batch_decision": "block",
+    "decision_matches_batch": true,
+    "triggered_rules": [
+      "R01"
+    ],
+    "context_rules": [
+      "C3",
+      "C6b"
+    ],
+    "status": "ok",
+    "explanation_present": true,
+    "total_ms": 38695.53,
+    "trace": [
+      "1. client -> coordinator analyze [ok] 38695.95 ms",
+      "2. coordinator -> anomaly score [ok] 49.11 ms",
+      "3. coordinator -> context adjust [ok] 6.75 ms",
+      "4. coordinator -> rule evaluate [ok] 8.67 ms",
+      "5. coordinator -> explainer explain [ok] 38629.96 ms"
+    ]
+  },
+  {
+    "transaction_id": 3519086,
+    "plan": {
+      "source": "llm",
+      "steps": [
+        "rule:evaluate",
+        "explainer:explain"
+      ],
+      "fallback_reason": null,
+      "duration_ms": 4568.22
+    },
+    "decision": "review",
+    "batch_decision": "review",
+    "decision_matches_batch": true,
+    "triggered_rules": [],
+    "context_rules": [
+      "C6a"
+    ],
+    "status": "ok",
+    "explanation_present": true,
+    "total_ms": 25033.06,
+    "trace": [
+      "1. client -> coordinator analyze [ok] 25033.44 ms",
+      "2. coordinator -> rule evaluate [ok] 109.39 ms",
+      "3. rule -> context adjust [ok] 99.59 ms",
+      "4. context -> anomaly score [ok] 91.81 ms",
+      "5. coordinator -> explainer explain [ok] 20354.28 ms"
+    ]
+  },
+  {
+    "transaction_id": 3517771,
+    "plan": {
+      "source": "llm",
+      "steps": [
+        "rule:evaluate"
+      ],
+      "fallback_reason": null,
+      "duration_ms": 3546.25
+    },
+    "decision": "allow",
+    "batch_decision": "allow",
+    "decision_matches_batch": true,
+    "triggered_rules": [],
+    "context_rules": [
+      "C1",
+      "C5",
+      "C9b"
+    ],
+    "status": "ok",
+    "explanation_present": false,
+    "total_ms": 3638.41,
+    "trace": [
+      "1. client -> coordinator analyze [ok] 3638.45 ms",
+      "2. coordinator -> rule evaluate [ok] 91.83 ms",
+      "3. rule -> context adjust [ok] 82.84 ms",
+      "4. context -> anomaly score [ok] 75.77 ms"
+    ]
+  }
+]

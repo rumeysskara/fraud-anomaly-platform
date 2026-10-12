@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
+from src.agents.bus import MessageBus
+from src.agents.config import load_agent_settings
+from src.agents.factory import AgentFactory, build_planner_llm, create_coordinator
+from src.agents.planner import Planner
 from src.context.factory import load_engine
 from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
 from src.features.pipeline import FeaturePipeline
@@ -66,6 +70,24 @@ class Container(containers.DeclarativeContainer):
         abstain_answer=rag_settings.provided.prompt.abstain_answer,
         ungrounded_warning=rag_settings.provided.prompt.ungrounded_warning,
     )
+
+    # Step 9: runtime agents (configs/agents.yaml). The bus is the Mediator; AgentFactory builds
+    # the agents from the services above (override any of them with a mock in tests).
+    agents_settings = providers.Singleton(load_agent_settings, CONFIG_DIR)
+    message_bus = providers.Singleton(MessageBus, agents_settings.provided.bus.max_depth)
+    planner_llm = providers.Singleton(build_planner_llm, rag_settings.provided.llm, agents_settings)
+    planner = providers.Singleton(Planner, planner_llm, agents_settings)
+    agent_factory = providers.Singleton(
+        AgentFactory,
+        message_bus,
+        agents_settings,
+        scoring_service,
+        context_adjuster,
+        rule_engine,
+        rag_service,
+        planner,
+    )
+    coordinator = providers.Singleton(create_coordinator, agent_factory)
 
 
 def create_container() -> Container:

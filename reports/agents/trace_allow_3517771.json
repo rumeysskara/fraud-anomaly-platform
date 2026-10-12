@@ -1,0 +1,107 @@
+{
+  "question": "TransactionID 3517771 işleminin kararı nedir? Açıklama gerekmez, sadece karar.",
+  "correlation_id": "f348497e953841128e0543281f875994",
+  "transaction_id": 3517771,
+  "status": "ok",
+  "decision": "allow",
+  "decision_source": "default",
+  "final_score": 0.26760757773202,
+  "anomaly_score": 0.31819046713938837,
+  "adjusted_score": 0.26760757773202,
+  "layer_scores": {
+    "multivariate": 0.31621523292982046,
+    "entity": 0.5403842451100566,
+    "column": 0.2950724804122814,
+    "temporal": 0.41748712175866404
+  },
+  "context_rules": [
+    "C1",
+    "C5",
+    "C9b"
+  ],
+  "triggered_rules": [],
+  "suppressed_rules": [],
+  "reasons": [
+    "Karar kuralı tetiklenmedi; skor 0.268 (inceleme eşiği 1.070)."
+  ],
+  "explanation": null,
+  "plan": {
+    "source": "llm",
+    "steps": [
+      "rule:evaluate"
+    ],
+    "fallback_reason": null,
+    "duration_ms": 3546.25
+  },
+  "errors": [],
+  "total_ms": 3638.41,
+  "trace": [
+    {
+      "seq": 1,
+      "message_id": "e58fe5e42e7443928a06d9766f015002",
+      "parent_id": null,
+      "sender": "client",
+      "recipient": "coordinator",
+      "intent": "analyze",
+      "status": "ok",
+      "duration_ms": 3638.45,
+      "timestamp": "2026-10-12T04:32:53.987986Z",
+      "payload_keys": [
+        "question",
+        "record"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 2,
+      "message_id": "6b588c38fb9a4c4eb2d4a93fecd597aa",
+      "parent_id": "e58fe5e42e7443928a06d9766f015002",
+      "sender": "coordinator",
+      "recipient": "rule",
+      "intent": "evaluate",
+      "status": "ok",
+      "duration_ms": 91.83,
+      "timestamp": "2026-10-12T04:32:57.534583Z",
+      "payload_keys": [
+        "adjusted_score",
+        "adjusted_score_unclipped",
+        "anomaly_score",
+        "layer_scores",
+        "record"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 3,
+      "message_id": "79d0f6f0fab14a05a547a24768605759",
+      "parent_id": "6b588c38fb9a4c4eb2d4a93fecd597aa",
+      "sender": "rule",
+      "recipient": "context",
+      "intent": "adjust",
+      "status": "ok",
+      "duration_ms": 82.84,
+      "timestamp": "2026-10-12T04:32:57.534739Z",
+      "payload_keys": [
+        "anomaly_score",
+        "layer_scores",
+        "record"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 4,
+      "message_id": "9cd0ed8205d7410ea4b3b7ef08260a6b",
+      "parent_id": "79d0f6f0fab14a05a547a24768605759",
+      "sender": "context",
+      "recipient": "anomaly",
+      "intent": "score",
+      "status": "ok",
+      "duration_ms": 75.77,
+      "timestamp": "2026-10-12T04:32:57.534878Z",
+      "payload_keys": [
+        "record"
+      ],
+      "detail": null
+    }
+  ]
+}
