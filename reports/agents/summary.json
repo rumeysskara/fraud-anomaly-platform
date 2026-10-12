@@ -24,17 +24,17 @@
     ],
     "status": "ok",
     "explanation_present": true,
-    "total_ms": 77489.12,
+    "total_ms": 103613.27,
     "trace": [
-      "1. client -> coordinator analyze [ok] 77489.68 ms",
-      "2. coordinator -> anomaly score [ok] 81.07 ms",
-      "3. coordinator -> context adjust [ok] 11.14 ms",
-      "4. coordinator -> rule evaluate [ok] 14.62 ms",
-      "5. coordinator -> explainer explain [ok] 77381.22 ms"
+      "1. client -> coordinator analyze [ok] 103622.54 ms",
+      "2. coordinator -> anomaly score [ok] 81.72 ms",
+      "3. coordinator -> context adjust [ok] 11.49 ms",
+      "4. coordinator -> rule evaluate [ok] 14.51 ms",
+      "5. coordinator -> explainer explain [ok] 103504.23 ms"
     ]
   },
   {
-    "transaction_id": 3519086,
+    "transaction_id": 3519443,
     "plan": {
       "source": "llm",
       "steps": [
@@ -42,28 +42,31 @@
         "explainer:explain"
       ],
       "fallback_reason": null,
-      "duration_ms": 10619.25
+      "duration_ms": 15608.03
     },
-    "decision": "review",
+    "decision": "allow",
     "batch_decision": "review",
-    "decision_matches_batch": true,
+    "decision_matches_batch": false,
     "triggered_rules": [],
     "context_rules": [
-      "C6a"
+      "C2",
+      "C3",
+      "C8",
+      "C9b"
     ],
     "status": "ok",
     "explanation_present": true,
-    "total_ms": 106961.29,
+    "total_ms": 69422.65,
     "trace": [
-      "1. client -> coordinator analyze [ok] 106961.45 ms",
-      "2. coordinator -> rule evaluate [ok] 178.09 ms",
-      "3. rule -> context adjust [ok] 159.02 ms",
-      "4. context -> anomaly score [ok] 143.59 ms",
-      "5. coordinator -> explainer explain [ok] 96162.55 ms"
+      "1. client -> coordinator analyze [ok] 69423.17 ms",
+      "2. coordinator -> rule evaluate [ok] 229.73 ms",
+      "3. rule -> context adjust [ok] 208.54 ms",
+      "4. context -> anomaly score [ok] 193.16 ms",
+      "5. coordinator -> explainer explain [ok] 53583.33 ms"
     ]
   },
   {
-    "transaction_id": 3517771,
+    "transaction_id": 3517753,
     "plan": {
       "source": "fallback",
       "steps": [
@@ -73,27 +76,25 @@
         "explainer:explain"
       ],
       "fallback_reason": "plan has no explanation step although the analyst asked a question",
-      "duration_ms": 8537.94
+      "duration_ms": 7886.76
     },
     "decision": "allow",
     "batch_decision": "allow",
     "decision_matches_batch": true,
     "triggered_rules": [],
     "context_rules": [
-      "C1",
-      "C5",
-      "C9b"
+      "C1"
     ],
     "status": "ok",
     "explanation_present": true,
-    "total_ms": 75047.42,
+    "total_ms": 84088.16,
     "trace": [
-      "1. client -> coordinator analyze [ok] 75047.79 ms",
+      "1. client -> coordinator analyze [ok] 84088.57 ms",
       "2. coordinator -> - plan_fallback [skipped] 0.0 ms",
-      "3. coordinator -> anomaly score [ok] 105.83 ms",
-      "4. coordinator -> context adjust [ok] 11.93 ms",
-      "5. coordinator -> rule evaluate [ok] 14.89 ms",
-      "6. coordinator -> explainer explain [ok] 66375.54 ms"
+      "3. coordinator -> anomaly score [ok] 102.0 ms",
+      "4. coordinator -> context adjust [ok] 11.44 ms",
+      "5. coordinator -> rule evaluate [ok] 15.85 ms",
+      "6. coordinator -> explainer explain [ok] 76070.73 ms"
     ]
   },
   {
@@ -122,14 +123,14 @@
     ],
     "status": "ok",
     "explanation_present": true,
-    "total_ms": 80102.3,
+    "total_ms": 81389.31,
     "trace": [
-      "1. client -> coordinator analyze [ok] 80102.56 ms",
-      "2. coordinator -> anomaly score [ok] 931.4 ms",
-      "3. anomaly -> feature featurize [ok] 856.74 ms",
-      "4. coordinator -> context adjust [ok] 10.15 ms",
-      "5. coordinator -> rule evaluate [ok] 13.52 ms",
-      "6. coordinator -> explainer explain [ok] 79146.43 ms"
+      "1. client -> coordinator analyze [ok] 81389.78 ms",
+      "2. coordinator -> anomaly score [ok] 935.4 ms",
+      "3. anomaly -> feature featurize [ok] 850.99 ms",
+      "4. coordinator -> context adjust [ok] 11.31 ms",
+      "5. coordinator -> rule evaluate [ok] 14.74 ms",
+      "6. coordinator -> explainer explain [ok] 80426.87 ms"
     ]
   }
 ]

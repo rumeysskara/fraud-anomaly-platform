@@ -58,6 +58,7 @@ def neutral() -> dict[str, Any]:
         "TransactionAmt": 50.0,
         "ProductCD": "H",
         "addr2": 87.0,
+        "addr1": 300.0,
         "email_ent_known": 0,
         "multivariate_score": 0.5,
         "entity_score": 0.5,

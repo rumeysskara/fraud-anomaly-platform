@@ -72,12 +72,13 @@ rules:
       - "R_emaildomain boşluğunun yapısal olduğu varsayımına bağlıdır (docs/assumptions.md 8)."
   R10:
     rationale: >-
-      Adım 6'daki revize C4 tanımı: uzun geçmiş, kendi normal tutarı, tanıdık cihaz VE e-posta.
+      Adım 6'daki revize C4 tanımı: uzun geçmiş, kendi normal tutarı, tanıdık cihaz VE e-posta,
+      addr1 dolu (K-55: addr1 eksikken entity fiilen yalnızca card1'dir ve birçok kartı birleştirir).
       Kart testi sinyali varsa güven geçersizdir. allow kararı block'u ve skor kaynaklı
       incelemeyi bastıramaz; yalnızca daha düşük öncelikli kural review'larını bastırır.
     limits:
-      - "allow verilen 3.830 holdout satırının precision'ı 0,106 (lift 3,07; fit 2,26): 'trusted' düşük risk anlamına gelmiyor. Entity bir kart grubu olduğu için etiket aynı karta/e-postaya yayılıyor (docs/assumptions.md 9)."
-      - "En yoğun entity adresi boş kart grubudur (card1 15885, pay %18,5)."
+      - "allow verilen 647 holdout satırının precision'ı 0,053 (lift 1,53; fit 1,81): 'trusted' hâlâ ortalamadan biraz riskli. Entity bir kart grubu olduğu için etiket aynı karta/e-postaya yayılıyor (docs/assumptions.md 9). addr1 koşulundan (K-55) önce 3.830 satır, precision 0,106 idi."
+      - "addr1 koşulundan önce R10 tetiklenmelerinin %83-88'i adresi boş kart gruplarındandı (en yoğunu card1 15885). Şimdi en yoğun entity holdout'ta card1 6019 / addr1 299 (pay %12,4), fit'te card1 17188 / addr1 299 (%19,0)."
   R11:
     rationale: >-
       Ülke kodu yok, kur çevrimi görünümlü 3 ondalıklı tutar ve yüksek tutar: kaynağı
@@ -123,10 +124,10 @@ context:
       - "Hafta sonu, 2017-12-01 referans tarihi varsayımına bağlıdır."
   C4:
     rationale: >-
-      Uzun geçmiş, entity'nin kendi normal tutar aralığı ve tanıdık cihaz VE e-posta birlikte, her zamanki gibi davranan geri dönen müşteriyi anlatır; anomali modellerinin ana yanlış pozitif kaynağı bu nadir ama normal müşterilerdir. 'Güvenilir' küçük bir azınlık olmalıdır, bu yüzden geçmiş eşiği yüksek bir fit kuantilidir. En güçlü indirimdir, sınırlıdır ve kart testi koruması (G1) tarafından geçersiz kılınır.
+      Uzun geçmiş, entity'nin kendi normal tutar aralığı ve tanıdık cihaz VE e-posta birlikte, her zamanki gibi davranan geri dönen müşteriyi anlatır; anomali modellerinin ana yanlış pozitif kaynağı bu nadir ama normal müşterilerdir. 'Güvenilir' küçük bir azınlık olmalıdır, bu yüzden geçmiş eşiği yüksek bir fit kuantilidir. En güçlü indirimdir, sınırlıdır ve kart testi koruması (G1) tarafından geçersiz kılınır. Adresi (addr1) boş kart grupları güvenilir sayılmaz: anahtar orada fiilen yalnızca card1'dir (K-55).
     limits:
-      - "Kapsam hedefin altında: fit %2,0 / holdout %4,0 (hedef %10-15). Sınırlayan koşul 'bilinen cihaz' (identity kaydı olan işlemlerle sınırlı)."
-      - "İyileşme küçük: %1'de -12, %5'te -154 FP, tek holdout üzerinde, güven aralığı yok."
+      - "Kapsam hedefin altında: fit %0,19 / holdout %0,55 (hedef %10-15). addr1 koşulundan (K-55) önce %2,0 / %4,0 idi ve bunun %86-91'i adresi boş kart gruplarındandı. Sınırlayan koşullar 'bilinen cihaz' (identity kaydı olan işlemlerle sınırlı) ve addr1 dolu."
+      - "İyileşme küçük: Adım 5'e göre %1'de -8, %5'te -185 FP, tek holdout üzerinde, güven aralığı yok."
   C5:
     rationale: >-
       Adım 5 bulgusu: temporal üst %1'in %96'sı tek bir yüksek hacimli kart grubunun burst'ü. Her zaman sık işlem yapan entity için yüksek velocity normal ritimdir; bu durumda temporal katman az bilgi taşır ve ağırlığı yarıya iner. Entity'nin günlük ortalamasının 3 katını aşan gerçek değişim tam ağırlıkla kalır.

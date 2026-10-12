@@ -25,7 +25,7 @@ FEATURE_COLUMNS = [
     "card_age_days",
     "small_amt_streak_1h",
 ]
-RAW_COLUMNS = ["TransactionAmt", "ProductCD", "addr2"]
+RAW_COLUMNS = ["TransactionAmt", "ProductCD", "addr2", "addr1"]  # addr1: C4 (K-55)
 DERIVED_COLUMNS = [
     "abs_amt_zscore_ent",
     "known_device",

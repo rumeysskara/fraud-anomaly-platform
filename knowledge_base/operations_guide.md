@@ -43,7 +43,7 @@ Review, otomatik karar için yeterli kanıt yok ama risk sinyali var demektir. A
 
 ## Allow kararı
 
-Allow, işlemin geçirilmesi demektir. İki yolu vardır: R10 (güvenilir entity) veya hiçbir kural tetiklenmemiş ve skor eşiğin altında (varsayılan). Analist normalde müdahale etmez. Ancak R10 allow kararının holdout'ta ortalamadan daha riskli çıktığı (precision 0,106, lift 3,07) bilinmelidir: entity bir kart grubudur ve güven kişiye değil gruba verilmiştir. Bu yüzden R10 allow'larından rastgele örnek alıp periyodik olarak kontrol etmek önerilir.
+Allow, işlemin geçirilmesi demektir. İki yolu vardır: R10 (güvenilir entity) veya hiçbir kural tetiklenmemiş ve skor eşiğin altında (varsayılan). Analist normalde müdahale etmez. Ancak R10 allow kararının holdout'ta ortalamadan daha riskli çıktığı (precision 0,053, lift 1,53) bilinmelidir: entity bir kart grubudur ve güven kişiye değil gruba verilmiştir. Bu yüzden R10 allow'larından rastgele örnek alıp periyodik olarak kontrol etmek önerilir.
 
 İlgili kurallar: R10
 

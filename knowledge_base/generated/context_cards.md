@@ -129,15 +129,16 @@ Aşağıdakilerin TÜMÜ sağlanmalı:
 - tutarın entity geçmişine göre mutlak z-skoru (`abs_amt_zscore_ent`) küçük veya eşit (`<=`) 2
 - cihaz entity tarafından daha önce kullanıldı (1 = evet) (`known_device`) eşit (`==`) 1
 - e-posta alanı entity tarafından daha önce kullanıldı (1 = evet) (`known_email`) eşit (`==`) 1
+- addr1 (`addr1`) dolu
 
-**Tanım (config, İngilizce):** Revised (Step 6 fix): previous transactions >= fit q90 of ent_txn_count, entity age >= 30 days, |amt_zscore_ent| <= 2, and BOTH the device and the e-mail domain were already used by this entity before.
+**Tanım (config, İngilizce):** Revised (Step 6 fix): previous transactions >= fit q90 of ent_txn_count, entity age >= 30 days, |amt_zscore_ent| <= 2, and BOTH the device and the e-mail domain were already used by this entity before. K-55: addr1 must be present (an addr1-missing entity is card1 only).
 
-**Gerekçe:** Uzun geçmiş, entity'nin kendi normal tutar aralığı ve tanıdık cihaz VE e-posta birlikte, her zamanki gibi davranan geri dönen müşteriyi anlatır; anomali modellerinin ana yanlış pozitif kaynağı bu nadir ama normal müşterilerdir. 'Güvenilir' küçük bir azınlık olmalıdır, bu yüzden geçmiş eşiği yüksek bir fit kuantilidir. En güçlü indirimdir, sınırlıdır ve kart testi koruması (G1) tarafından geçersiz kılınır.
+**Gerekçe:** Uzun geçmiş, entity'nin kendi normal tutar aralığı ve tanıdık cihaz VE e-posta birlikte, her zamanki gibi davranan geri dönen müşteriyi anlatır; anomali modellerinin ana yanlış pozitif kaynağı bu nadir ama normal müşterilerdir. 'Güvenilir' küçük bir azınlık olmalıdır, bu yüzden geçmiş eşiği yüksek bir fit kuantilidir. En güçlü indirimdir, sınırlıdır ve kart testi koruması (G1) tarafından geçersiz kılınır. Adresi (addr1) boş kart grupları güvenilir sayılmaz: anahtar orada fiilen yalnızca card1'dir (K-55).
 
 **Bilinen sınırlar:**
 
-- Kapsam hedefin altında: fit %2,0 / holdout %4,0 (hedef %10-15). Sınırlayan koşul 'bilinen cihaz' (identity kaydı olan işlemlerle sınırlı).
-- İyileşme küçük: %1'de -12, %5'te -154 FP, tek holdout üzerinde, güven aralığı yok.
+- Kapsam hedefin altında: fit %0,19 / holdout %0,55 (hedef %10-15). addr1 koşulundan (K-55) önce %2,0 / %4,0 idi ve bunun %86-91'i adresi boş kart gruplarındandı. Sınırlayan koşullar 'bilinen cihaz' (identity kaydı olan işlemlerle sınırlı) ve addr1 dolu.
+- İyileşme küçük: Adım 5'e göre %1'de -8, %5'te -185 FP, tek holdout üzerinde, güven aralığı yok.
 
 ## C5 - frequent_entity_temporal_weight
 

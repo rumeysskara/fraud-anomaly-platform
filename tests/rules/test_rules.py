@@ -106,3 +106,11 @@ def test_disabled_rule_is_ignored(engine, neutral, repo):
     rules = [r.model_copy(update={"enabled": False}) if r.id == "R01" else r for r in repo.rules]
     result = engine.evaluate({**neutral, **CASES["R01"][0]}, 0.5, rules=rules)
     assert "R01" not in result.triggered_rules
+
+
+@pytest.mark.parametrize("missing", [None, float("nan")])
+def test_r10_never_trusts_an_addr1_missing_entity(engine, neutral, missing):
+    """K-55: with addr1 missing the entity key is card1 alone, so R10 must not fire."""
+    assert "R10" in engine.evaluate({**neutral, **TRUSTED}, 0.5).triggered_rules
+    result = engine.evaluate({**neutral, **TRUSTED, "addr1": missing}, 0.5)
+    assert "R10" not in result.triggered_rules

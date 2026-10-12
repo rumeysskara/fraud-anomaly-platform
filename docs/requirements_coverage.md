@@ -4,7 +4,7 @@ Her case maddesi, repoda onu karşılayan kod, rapor veya dokümanla eşlenmişt
 bulunan dosyalar yazıldı. `*.parquet`, `artifacts/` ve `data/processed/` `.gitignore`'dadır: bu dosyalar
 temiz klonda yoktur, `make pipeline` ile üretilir. Tabloda bunlar "(parquet, üretilir)" diye işaretlidir.
 
-Son güncelleme: K-52 ... K-54 sonrası (outlier CSV, "user" feature eşlemesi, örnek fraud politikası, FeatureAgent).
+Son güncelleme: K-52 ... K-56 sonrası (outlier CSV, "user" feature eşlemesi, örnek fraud politikası, FeatureAgent, C4/R10'da addr1 dolu koşulu; z-skoru std tabanı bilinen sınır olarak kayıtlı).
 Tüm maddeler **tam**.
 
 Durum: **tam** = madde doğrudan karşılanıyor; **kısmi** = karşılanıyor ama ayrı/açık bir çıktısı veya
@@ -67,8 +67,8 @@ adlandırması eksik; **yok** = repoda karşılığı yok.
 |---|---|---|---|---|
 | 6 | Business hours context | [`configs/context.yaml`](../configs/context.yaml) C1 `business_hours_known_entity`; [`src/context/engine.py`](../src/context/engine.py) `ContextAdjustEngine` | Yerel 09-18, hafta içi, geçmişi olan entity: x0,90 | tam |
 | 6 | Weekend adjustment | [`configs/context.yaml`](../configs/context.yaml) C3 `weekend_established_entity` | Hafta sonu + en az 5 önceki işlem: x0,95 | tam |
-| 6 | Trusted entity adjustment | [`configs/context.yaml`](../configs/context.yaml) C4 `trusted_entity`; [c4_coverage.csv](../reports/context/c4_coverage.csv) | Uzun geçmiş + normal tutar + bilinen cihaz ve e-posta: x0,75 | tam |
-| 6 | False positive azaltımı (önce/sonra metrik) | [fp_comparison.csv](../reports/context/fp_comparison.csv); [fp_impact.csv](../reports/context/fp_impact.csv); [ablation.csv](../reports/context/ablation.csv); [technical_doc.md §6.4](technical_doc.md#64-false-positive-etkisi-ve-kural-bazlı-ablation), [§8](technical_doc.md#8-önce--sonra-false-positive-tablosu) | Holdout'ta %1 / %5 bütçede FP, precision, recall; kural bazlı ablation | tam |
+| 6 | Trusted entity adjustment | [`configs/context.yaml`](../configs/context.yaml) C4 `trusted_entity`; [c4_coverage.csv](../reports/context/c4_coverage.csv) | Uzun geçmiş + normal tutar + bilinen cihaz ve e-posta + addr1 dolu (K-55: adresi boş kart grupları güvenilir sayılmaz): x0,75 | tam |
+| 6 | False positive azaltımı (önce/sonra metrik) | [fp_comparison.csv](../reports/context/fp_comparison.csv); [fp_impact.csv](../reports/context/fp_impact.csv); [ablation.csv](../reports/context/ablation.csv); [technical_doc.md §6.4](technical_doc.md#64-false-positive-etkisi-ve-kural-bazlı-ablation), [§8](technical_doc.md#8-önce--sonra-false-positive-tablosu) | Holdout'ta %1 / %5 bütçede FP, precision, recall; kural bazlı ablation; A1 (K-55) sonrası satırları eklendi, öncekiler korundu | tam |
 | 6 | Kendi context kurallarımız ve dokümantasyonu | [`configs/context.yaml`](../configs/context.yaml) C2, C5, C6a/b, C7, C8, C9a/b, G1; [step6.md](step6.md); [technical_doc.md §6.2](technical_doc.md#62-kurallar-parametreler-ve-gerekçeler); [context_cards.md](../knowledge_base/generated/context_cards.md) | Her kuralda koşul, çarpan, `rationale` | tam |
 
 ## Adım 7 - Rule Engine

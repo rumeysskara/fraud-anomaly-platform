@@ -32,7 +32,7 @@ Hiçbir kural karar vermese bile anomali skoru (kural artışı öncesi, context
 
 ## Geçirme (allow) ve güvenilir müşteri ilkeleri
 
-Kural tetiklenmeyen ve skoru inceleme eşiğinin altında kalan işlemler geçirilir. Uzun geçmişi olan, kendi normal tutar aralığında işlem yapan ve daha önce kullandığı cihaz ve e-posta ile gelen kart grubu "güvenilir" sayılır ve geçirilir. Güvenilir statüsü üç sınırla korunur:
+Kural tetiklenmeyen ve skoru inceleme eşiğinin altında kalan işlemler geçirilir. Uzun geçmişi olan, kendi normal tutar aralığında işlem yapan, daha önce kullandığı cihaz ve e-posta ile gelen ve adresi (addr1) bilinen kart grubu "güvenilir" sayılır ve geçirilir. Adresi boş kart grupları güvenilir sayılmaz, çünkü anahtar orada yalnızca kart numarası grubudur ve birçok kartı birleştirir. Güvenilir statüsü üç sınırla korunur:
 
 - Kart testi sinyali varken güvenilir statüsü geçersizdir; hiçbir indirim skoru ham skorun altına indiremez.
 - Herhangi bir block kuralı güvenilir statüsünü yener.

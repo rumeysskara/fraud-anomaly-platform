@@ -330,17 +330,18 @@ Aşağıdakilerin TÜMÜ sağlanmalı:
 - tutarın entity geçmişine göre z-skoru (`amt_zscore_ent`) -2 ile 2 arasında (uçlar dahil)
 - cihaz entity tarafından daha önce kullanıldı (1 = evet) (`known_device`) eşit (`==`) 1
 - e-posta alanı entity tarafından daha önce kullanıldı (1 = evet) (`known_email`) eşit (`==`) 1
+- addr1 (`addr1`) dolu
 - Şu koşul SAĞLANMAMALI:
   - entity'nin son 1 saatteki önceki küçük tutarlı işlem sayısı (`small_amt_streak_1h`) büyük veya eşit (`>=`) 2
 
-**Tanım (config, İngilizce):** Step 6 C4 trusted definition (history >= C4 fit q90 from artifacts/context, age >= 30 days, |amt_zscore_ent| <= 2, known device AND known e-mail) and no card-testing signal.
+**Tanım (config, İngilizce):** Step 6 C4 trusted definition (history >= C4 fit q90 from artifacts/context, age >= 30 days, |amt_zscore_ent| <= 2, known device AND known e-mail, addr1 present (K-55)) and no card-testing signal.
 
-**Gerekçe:** Adım 6'daki revize C4 tanımı: uzun geçmiş, kendi normal tutarı, tanıdık cihaz VE e-posta. Kart testi sinyali varsa güven geçersizdir. allow kararı block'u ve skor kaynaklı incelemeyi bastıramaz; yalnızca daha düşük öncelikli kural review'larını bastırır.
+**Gerekçe:** Adım 6'daki revize C4 tanımı: uzun geçmiş, kendi normal tutarı, tanıdık cihaz VE e-posta, addr1 dolu (K-55: addr1 eksikken entity fiilen yalnızca card1'dir ve birçok kartı birleştirir). Kart testi sinyali varsa güven geçersizdir. allow kararı block'u ve skor kaynaklı incelemeyi bastıramaz; yalnızca daha düşük öncelikli kural review'larını bastırır.
 
 **Bilinen sınırlar:**
 
-- allow verilen 3.830 holdout satırının precision'ı 0,106 (lift 3,07; fit 2,26): 'trusted' düşük risk anlamına gelmiyor. Entity bir kart grubu olduğu için etiket aynı karta/e-postaya yayılıyor (docs/assumptions.md 9).
-- En yoğun entity adresi boş kart grubudur (card1 15885, pay %18,5).
+- allow verilen 647 holdout satırının precision'ı 0,053 (lift 1,53; fit 1,81): 'trusted' hâlâ ortalamadan biraz riskli. Entity bir kart grubu olduğu için etiket aynı karta/e-postaya yayılıyor (docs/assumptions.md 9). addr1 koşulundan (K-55) önce 3.830 satır, precision 0,106 idi.
+- addr1 koşulundan önce R10 tetiklenmelerinin %83-88'i adresi boş kart gruplarındandı (en yoğunu card1 15885). Şimdi en yoğun entity holdout'ta card1 6019 / addr1 299 (pay %12,4), fit'te card1 17188 / addr1 299 (%19,0).
 
 ## R11 - converted_amount_no_country_high_amount
 

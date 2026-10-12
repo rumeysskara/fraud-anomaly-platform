@@ -1,34 +1,35 @@
 {
-  "question": "TransactionID 3517771 işleminin kararı nedir? Açıklama gerekmez, sadece karar.",
-  "correlation_id": "af91b9770b724841b54144b08dc2b754",
-  "transaction_id": 3517771,
+  "question": "TransactionID 3519443 işlemini incele ve bir inceleme notu yaz.",
+  "correlation_id": "2ba3f471f1204a5d9c2fc36ed36e3200",
+  "transaction_id": 3519443,
   "status": "ok",
   "decision": "allow",
   "decision_source": "default",
-  "final_score": 0.26760757773202,
-  "anomaly_score": 0.31819046713938837,
-  "adjusted_score": 0.26760757773202,
+  "final_score": 1.0,
+  "anomaly_score": 0.8736607904891679,
+  "adjusted_score": 1.0,
   "layer_scores": {
-    "multivariate": 0.31621523292982046,
-    "entity": 0.5403842451100566,
-    "column": 0.2950724804122814,
-    "temporal": 0.41748712175866404
+    "multivariate": 0.601033190970874,
+    "entity": 0.8501887208716785,
+    "column": 0.7545287273142203,
+    "temporal": 0.8329707662476822
   },
   "context_rules": [
-    "C1",
-    "C5",
+    "C2",
+    "C3",
+    "C8",
     "C9b"
   ],
   "triggered_rules": [],
   "suppressed_rules": [],
   "reasons": [
-    "Karar kuralı tetiklenmedi; skor 0.268 (inceleme eşiği 1.070)."
+    "Karar kuralı tetiklenmedi; skor 1.043 (inceleme eşiği 1.075)."
   ],
   "explanation": {
     "label": "destek bilgisi",
     "affects_decision": false,
     "origin": "rag",
-    "text": "Bu işlem, anomali skoru 0.268 olarak düşük olduğu için otomatik bir karar verilmedi. Bu durumda, işlem risk sinyali olarak işaretlenmesi halinde manuel incelemeye giderdi ancak bu örnekte böyle bir sinyal de yoktu.\n\nAyrıca, işlemde tetiklenen herhangi bir kural da yokken ve skorun da belirli bir eşiğin altında olduğu için, analistin bu işlemi incelemesi gerekmeyebilir. Ancak, eğer sistemde risk sinyalleri varsa veya yeni kurallar eklenirse, tekrar gözden geçirilmeli.\n\nKaynaklar: [fraud_policy#manuel-inceleme-review-ilkeleri] [operations_guide#review-karari-manuel-inceleme]",
+    "text": "Bu işlem, anomali skoru %1'lik eşiğin altında kalmıştır (1.043 < 1.075) ve tek başına bir karar verici olmamıştır. Manuel incelemeye giden risk sinyalleri yokken ve kural motoru otomatik olarak işlemi serbest bırakma kararı verir.\n\nKaynaklar: [fraud_policy#manuel-inceleme-review-ilkeleri] [operations_guide#review-karari-manuel-inceleme]",
     "sources": [
       {
         "chunk_id": "fraud_policy#manuel-inceleme-review-ilkeleri",
@@ -96,29 +97,27 @@
     "warning": null
   },
   "plan": {
-    "source": "fallback",
+    "source": "llm",
     "steps": [
-      "anomaly:score",
-      "context:adjust",
       "rule:evaluate",
       "explainer:explain"
     ],
-    "fallback_reason": "plan has no explanation step although the analyst asked a question",
-    "duration_ms": 8537.94
+    "fallback_reason": null,
+    "duration_ms": 15608.03
   },
   "errors": [],
-  "total_ms": 75047.42,
+  "total_ms": 69422.65,
   "trace": [
     {
       "seq": 1,
-      "message_id": "ec41a569fd4748cf803ac5354c07b881",
+      "message_id": "73ae2c14f3574b739e08010039377fc6",
       "parent_id": null,
       "sender": "client",
       "recipient": "coordinator",
       "intent": "analyze",
       "status": "ok",
-      "duration_ms": 75047.79,
-      "timestamp": "2026-10-12T10:02:52.504375Z",
+      "duration_ms": 69423.17,
+      "timestamp": "2026-10-12T12:05:23.575021Z",
       "payload_keys": [
         "question",
         "record",
@@ -128,61 +127,14 @@
     },
     {
       "seq": 2,
-      "message_id": "",
-      "parent_id": null,
-      "sender": "coordinator",
-      "recipient": "-",
-      "intent": "plan_fallback",
-      "status": "skipped",
-      "duration_ms": 0.0,
-      "timestamp": "2026-10-12T10:03:01.042670Z",
-      "payload_keys": [],
-      "detail": "plan has no explanation step although the analyst asked a question"
-    },
-    {
-      "seq": 3,
-      "message_id": "c7386ab4462f48e2b24c0f76a447fadf",
-      "parent_id": "ec41a569fd4748cf803ac5354c07b881",
-      "sender": "coordinator",
-      "recipient": "anomaly",
-      "intent": "score",
-      "status": "ok",
-      "duration_ms": 105.83,
-      "timestamp": "2026-10-12T10:03:01.042962Z",
-      "payload_keys": [
-        "record",
-        "transaction"
-      ],
-      "detail": null
-    },
-    {
-      "seq": 4,
-      "message_id": "2240e572802746e6828265a4fc162b55",
-      "parent_id": "ec41a569fd4748cf803ac5354c07b881",
-      "sender": "coordinator",
-      "recipient": "context",
-      "intent": "adjust",
-      "status": "ok",
-      "duration_ms": 11.93,
-      "timestamp": "2026-10-12T10:03:01.148910Z",
-      "payload_keys": [
-        "anomaly_score",
-        "layer_scores",
-        "record",
-        "transaction"
-      ],
-      "detail": null
-    },
-    {
-      "seq": 5,
-      "message_id": "c39931f594d04139a204732d977a24dc",
-      "parent_id": "ec41a569fd4748cf803ac5354c07b881",
+      "message_id": "f118abd9867245449ebfd21256d0f99a",
+      "parent_id": "73ae2c14f3574b739e08010039377fc6",
       "sender": "coordinator",
       "recipient": "rule",
       "intent": "evaluate",
       "status": "ok",
-      "duration_ms": 14.89,
-      "timestamp": "2026-10-12T10:03:01.160943Z",
+      "duration_ms": 229.73,
+      "timestamp": "2026-10-12T12:05:39.183333Z",
       "payload_keys": [
         "adjusted_score",
         "adjusted_score_unclipped",
@@ -194,15 +146,49 @@
       "detail": null
     },
     {
-      "seq": 6,
-      "message_id": "1ae7ef59d8e44bf2914b10db2030db3a",
-      "parent_id": "ec41a569fd4748cf803ac5354c07b881",
+      "seq": 3,
+      "message_id": "16ccf073feca4555aa3c9f0f5d933518",
+      "parent_id": "f118abd9867245449ebfd21256d0f99a",
+      "sender": "rule",
+      "recipient": "context",
+      "intent": "adjust",
+      "status": "ok",
+      "duration_ms": 208.54,
+      "timestamp": "2026-10-12T12:05:39.183775Z",
+      "payload_keys": [
+        "anomaly_score",
+        "layer_scores",
+        "record",
+        "transaction"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 4,
+      "message_id": "b13276356bb144dc9a1b4f03e0db578e",
+      "parent_id": "16ccf073feca4555aa3c9f0f5d933518",
+      "sender": "context",
+      "recipient": "anomaly",
+      "intent": "score",
+      "status": "ok",
+      "duration_ms": 193.16,
+      "timestamp": "2026-10-12T12:05:39.183986Z",
+      "payload_keys": [
+        "record",
+        "transaction"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 5,
+      "message_id": "0b3baebd7293494f86786b545036c238",
+      "parent_id": "73ae2c14f3574b739e08010039377fc6",
       "sender": "coordinator",
       "recipient": "explainer",
       "intent": "explain",
       "status": "ok",
-      "duration_ms": 66375.54,
-      "timestamp": "2026-10-12T10:03:01.175899Z",
+      "duration_ms": 53583.33,
+      "timestamp": "2026-10-12T12:05:39.413338Z",
       "payload_keys": [
         "context_rules",
         "layer_scores",

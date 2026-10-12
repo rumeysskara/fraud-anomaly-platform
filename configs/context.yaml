@@ -120,7 +120,7 @@ rules:
     description: >-
       Revised (Step 6 fix): previous transactions >= fit q90 of ent_txn_count, entity age >= 30
       days, |amt_zscore_ent| <= 2, and BOTH the device and the e-mail domain were already used by
-      this entity before.
+      this entity before. K-55: addr1 must be present (an addr1-missing entity is card1 only).
     type: multiplicative
     factor: 0.75
     condition:
@@ -130,13 +130,18 @@ rules:
         - {feature: abs_amt_zscore_ent, op: "<=", value: 2.0}
         - {feature: known_device, op: "==", value: 1}
         - {feature: known_email, op: "==", value: 1}
+        - {feature: addr1, op: notna}
     rationale: >-
       A long history, an amount inside the entity's own normal range and a familiar device AND
       e-mail together describe a returning customer behaving as usual; this is the main
       false-positive source of anomaly models (rare-but-normal customers). Definition principle
       (label-free): "trusted" must be a small minority, so the history threshold is a high fit
       quantile, not a fixed count (with entity = card group a fixed 20 covered ~61% of holdout).
-      Strongest discount, still bounded and overridden by the card-testing guard.
+      Strongest discount, still bounded and overridden by the card-testing guard. K-55 (label-free,
+      added after the holdout results were seen): with addr1 missing the entity key is in effect
+      card1 alone and merges many cards (largest such entity: 609 devices, 21 e-mail domains),
+      so "known device AND known e-mail" is almost always true there; 83-91% of trusted rows came
+      from these entities. Trust is given only to an identified card group (addr1 present).
 
   - id: C5
     group: C5

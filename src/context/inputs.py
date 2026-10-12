@@ -16,12 +16,11 @@ from src.features.utils import NA_KEY, entity_keys, value_keys
 
 EMAIL_SOURCE = "P_emaildomain"
 # entity key columns come from configs/entity.yaml (K-05), never hardcoded
-RAW_SOURCE_COLUMNS = [
-    "TransactionDT",
-    *RAW_COLUMNS,
-    *load_yaml("entity.yaml")["entity"]["columns"],
-    EMAIL_SOURCE,
-]
+_ENTITY_COLUMNS = load_yaml("entity.yaml")["entity"]["columns"]
+# addr1 is both a raw input (C4, K-55) and an entity column: keep each column once
+RAW_SOURCE_COLUMNS = list(
+    dict.fromkeys(["TransactionDT", *RAW_COLUMNS, *_ENTITY_COLUMNS, EMAIL_SOURCE])
+)
 
 
 def email_known_batch(raw: pd.DataFrame, entity_columns: list[str] | None = None) -> pd.Series:

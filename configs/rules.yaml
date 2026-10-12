@@ -87,6 +87,7 @@ inputs:
     - device_ent_match
   raw:          # data/processed/merged.parquet, joined by TransactionID
     - TransactionAmt
+    - addr1         # R10 (K-55): trusted only when addr1 is present
     - ProductCD
     - addr2
     - P_emaildomain
@@ -278,7 +279,8 @@ rules:
     name: trusted_entity_allow
     description: >-
       Step 6 C4 trusted definition (history >= C4 fit q90 from artifacts/context, age >= 30 days,
-      |amt_zscore_ent| <= 2, known device AND known e-mail) and no card-testing signal.
+      |amt_zscore_ent| <= 2, known device AND known e-mail, addr1 present (K-55)) and no
+      card-testing signal.
     priority: 5
     severity: low
     condition:
@@ -288,6 +290,7 @@ rules:
         - {feature: amt_zscore_ent, op: between, value: [-2.0, 2.0]}
         - {feature: known_device, op: "==", value: 1}
         - {feature: known_email, op: "==", value: 1}
+        - {feature: addr1, op: is_null, value: false}
         - not: {feature: small_amt_streak_1h, op: ">=", value: 2}
     action: {risk_boost: 0.0, decision: allow, flag: trusted_entity}
     message: >-
@@ -302,5 +305,5 @@ learned:
   amount_small: 25.950001
   amount_high: 441.950012
   velocity_1h_extreme: 12.0
-  score_review_threshold: 1.069619
+  score_review_threshold: 1.074521
   n_fit: 472432

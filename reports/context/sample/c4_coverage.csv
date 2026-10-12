@@ -4,4 +4,5 @@ C4,ent_age_days >= 30,0.0,0.0
 C4,abs_amt_zscore_ent <= 2.0,0.92325,0.9201
 C4,known_device == 1,0.09765,0.1734
 C4,known_email == 1,0.4393,0.5305
+C4,addr1 notna,0.94345,0.9671
 C4,combined (all clauses),0.0,0.0

@@ -1,0 +1,213 @@
+{
+  "question": "TransactionID 3517753 işleminin kararı nedir? Açıklama gerekmez, sadece karar.",
+  "correlation_id": "e86b3b790ecf4c02ac83c0c13e163ae4",
+  "transaction_id": 3517753,
+  "status": "ok",
+  "decision": "allow",
+  "decision_source": "default",
+  "final_score": 0.7070262758887416,
+  "anomaly_score": 0.7855847509874906,
+  "adjusted_score": 0.7070262758887416,
+  "layer_scores": {
+    "multivariate": 0.7670061286047672,
+    "entity": 0.47235757503197906,
+    "column": 0.9994866430142512,
+    "temporal": 0.45398577927881867
+  },
+  "context_rules": [
+    "C1"
+  ],
+  "triggered_rules": [],
+  "suppressed_rules": [],
+  "reasons": [
+    "Karar kuralı tetiklenmedi; skor 0.707 (inceleme eşiği 1.075)."
+  ],
+  "explanation": {
+    "label": "destek bilgisi",
+    "affects_decision": false,
+    "origin": "rag",
+    "text": "Bu işlem, anomali skoru %70.707 olarak belirlendi ve bu değerin incelemeye alınacak eşiği %1.075'ten düşük olduğu için otomatik olarak onaylandı. Tetiklenen kural yokken ve risk sinyalleri olmasına rağmen, işlemin otomatik kontrol altına alınma koşullarını sağlamadığından, işlem allow kararı aldı.\n\nAristoteles'in bakması gerekenler:\n1. Entity'nin geçmiş işlem sayısı.\n2. Kart yaşı.\n3. Bilinen cihaz ve e-posta bilgileri.\n\nBu bilgilere dayanarak analist, işlemi daha dikkatlice inceleyebilir. Eğer risk sinyallerinin birçoğunu tetiklediği takdirde, manual inceleme kararı alınabilir.\n\nKaynaklar: [fraud_policy#manuel-inceleme-review-ilkeleri] [operations_guide#review-karari-manuel-inceleme]",
+    "sources": [
+      {
+        "chunk_id": "fraud_policy#manuel-inceleme-review-ilkeleri",
+        "heading": "Örnek Fraud Politikası > Manuel inceleme (review) ilkeleri",
+        "doc_type": "policy",
+        "rule_ids": [
+          "R03",
+          "R04",
+          "R05",
+          "R06",
+          "R07",
+          "R08",
+          "R09",
+          "R11",
+          "R12"
+        ],
+        "score": 0.5974,
+        "retrieval": "semantic"
+      },
+      {
+        "chunk_id": "operations_guide#block-karari",
+        "heading": "Operasyon Rehberi (Analist) > Block kararı",
+        "doc_type": "operations",
+        "rule_ids": [
+          "R01",
+          "R02"
+        ],
+        "score": 0.5969,
+        "retrieval": "semantic"
+      },
+      {
+        "chunk_id": "operations_guide#review-karari-manuel-inceleme",
+        "heading": "Operasyon Rehberi (Analist) > Review kararı (manuel inceleme)",
+        "doc_type": "operations",
+        "rule_ids": [
+          "R03",
+          "R04",
+          "R05",
+          "R06",
+          "R07",
+          "R08",
+          "R09",
+          "R11",
+          "R12"
+        ],
+        "score": 0.58,
+        "retrieval": "semantic"
+      },
+      {
+        "chunk_id": "operations_guide#operasyon-rehberi-analist",
+        "heading": "Operasyon Rehberi (Analist)",
+        "doc_type": "operations",
+        "rule_ids": [],
+        "score": 0.5696,
+        "retrieval": "semantic"
+      }
+    ],
+    "cited_ids": [
+      "fraud_policy#manuel-inceleme-review-ilkeleri",
+      "operations_guide#review-karari-manuel-inceleme"
+    ],
+    "grounded": true,
+    "abstained": false,
+    "flags": [],
+    "warning": null
+  },
+  "plan": {
+    "source": "fallback",
+    "steps": [
+      "anomaly:score",
+      "context:adjust",
+      "rule:evaluate",
+      "explainer:explain"
+    ],
+    "fallback_reason": "plan has no explanation step although the analyst asked a question",
+    "duration_ms": 7886.76
+  },
+  "errors": [],
+  "total_ms": 84088.16,
+  "trace": [
+    {
+      "seq": 1,
+      "message_id": "e99e5cedd35441a4873870b8545a56c7",
+      "parent_id": null,
+      "sender": "client",
+      "recipient": "coordinator",
+      "intent": "analyze",
+      "status": "ok",
+      "duration_ms": 84088.57,
+      "timestamp": "2026-10-12T12:06:32.998953Z",
+      "payload_keys": [
+        "question",
+        "record",
+        "transaction"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 2,
+      "message_id": "",
+      "parent_id": null,
+      "sender": "coordinator",
+      "recipient": "-",
+      "intent": "plan_fallback",
+      "status": "skipped",
+      "duration_ms": 0.0,
+      "timestamp": "2026-10-12T12:06:40.885714Z",
+      "payload_keys": [],
+      "detail": "plan has no explanation step although the analyst asked a question"
+    },
+    {
+      "seq": 3,
+      "message_id": "48f4b83e6ca048cab44768defe33eb59",
+      "parent_id": "e99e5cedd35441a4873870b8545a56c7",
+      "sender": "coordinator",
+      "recipient": "anomaly",
+      "intent": "score",
+      "status": "ok",
+      "duration_ms": 102.0,
+      "timestamp": "2026-10-12T12:06:40.886036Z",
+      "payload_keys": [
+        "record",
+        "transaction"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 4,
+      "message_id": "d3bd429db06c48e2b12a1a3937701751",
+      "parent_id": "e99e5cedd35441a4873870b8545a56c7",
+      "sender": "coordinator",
+      "recipient": "context",
+      "intent": "adjust",
+      "status": "ok",
+      "duration_ms": 11.44,
+      "timestamp": "2026-10-12T12:06:40.988150Z",
+      "payload_keys": [
+        "anomaly_score",
+        "layer_scores",
+        "record",
+        "transaction"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 5,
+      "message_id": "735d16bea01544329ddff2d895d147ec",
+      "parent_id": "e99e5cedd35441a4873870b8545a56c7",
+      "sender": "coordinator",
+      "recipient": "rule",
+      "intent": "evaluate",
+      "status": "ok",
+      "duration_ms": 15.85,
+      "timestamp": "2026-10-12T12:06:40.999683Z",
+      "payload_keys": [
+        "adjusted_score",
+        "adjusted_score_unclipped",
+        "anomaly_score",
+        "layer_scores",
+        "record",
+        "transaction"
+      ],
+      "detail": null
+    },
+    {
+      "seq": 6,
+      "message_id": "dde77daa1f944e889f66f5d36db34e7a",
+      "parent_id": "e99e5cedd35441a4873870b8545a56c7",
+      "sender": "coordinator",
+      "recipient": "explainer",
+      "intent": "explain",
+      "status": "ok",
+      "duration_ms": 76070.73,
+      "timestamp": "2026-10-12T12:06:41.015579Z",
+      "payload_keys": [
+        "context_rules",
+        "layer_scores",
+        "question",
+        "rule_result"
+      ],
+      "detail": null
+    }
+  ]
+}

@@ -90,7 +90,7 @@ Dış parametre (`external_params:`): R10'un geçmiş eşiği Adım 6 C4'ün ö�
 | `amount_small` | fit TransactionAmt q10 (Adım 3 `small_amt_threshold` ile aynı, script kontrol eder) | 25,95 | 25,00 |
 | `amount_high` | fit TransactionAmt q95 (tüm "yüksek tutar" koşulları) | 441,95 | 400,00 |
 | `velocity_1h_extreme` | fit `ent_cnt_1h` q99,9 | 12 | 7 |
-| `score_review_threshold` | fit `adjusted_score_unclipped` q99 (skor tabanlı inceleme) | 1,0696 | 1,1166 |
+| `score_review_threshold` | fit `adjusted_score_unclipped` q99 (skor tabanlı inceleme) | 1,0745 (A1 öncesi 1,0696; Adım 6 skoru değiştiği için yeniden öğrenildi) | 1,1166 |
 | `trusted_min_history` | Adım 6 C4, fit `ent_txn_count` q90 (dış) | 809 | 51 |
 
 n_fit = 472.432 (örneklem 40.000). R03 cooldown penceresi 3.600 sn kuralın kendi tanımındadır (`cooldown.window_seconds`).
@@ -110,6 +110,7 @@ Tetiklenme payları ve yoğunlaşma etiketsizdir (`reports/rules/rule_coverage.c
 | R08 | `has_identity = 0`, tutar >= q95, `ProductCD != W` | 3 | medium | review | +0,08 | 3 | 1 | 0 (n=1) | - |
 | R09 | `email_mismatch = 1` (P ve R dolu, farklı) ve tutar >= q95 | 4 | low | review | +0,03 | 472 (%0,10) | 62 (%0,05) | 0,339 | 9,84 |
 | R10 | C4 trusted (geçmiş >= 809, yaş >= 30 gün, z ∈ [-2, 2], bilinen cihaz VE e-posta) ve kart testi yok | 5 | low | allow | 0 | 7.350 (%1,56) | 3.830 (%3,24) | 0,106 | 3,07 |
+| R10 (A1 sonrası, K-55) | yukarıdaki + `addr1` dolu | 5 | low | allow | 0 | 883 (%0,19) | 647 (%0,55) | 0,053 | 1,53 |
 | R11 (JSON) | `amt_has_3dec = 1`, `addr2` boş (`is_null`), tutar >= q95 | 3 | medium | review | +0,08 | 4 | 0 | - | - |
 | R12 (JSON) | `holiday_season = 1`, yeni kart, tutar >= q95 | 3 | medium | review | +0,08 | 1.300 (%0,28) | 0 | - | - |
 
@@ -258,8 +259,10 @@ Kural kararı yoksa `reasons` bir skor satırı içerir (ör. "Karar kuralı tet
 |---|---|---|---|---|---|
 | fit (472.432) | %92,81 | 7.348 (%1,56) | %1,03 | %3,87 | %0,74 |
 | holdout (118.108) | 108.001 (%91,44) | 3.830 (%3,24) | 1.130 (%0,96) | 4.514 (%3,82) | 633 (%0,54) |
+| fit, A1 sonrası (K-55) | 445.006 (%94,19) | 881 (%0,19) | 4.855 (%1,03) | 18.290 (%3,87) | 3.400 (%0,72) |
+| holdout, A1 sonrası (K-55) | 111.073 (%94,04) | 647 (%0,55) | 1.130 (%0,96) | 4.514 (%3,82) | 744 (%0,63) |
 
-İlk sürüme göre holdout'ta kural kaynaklı review 5.621'den 4.514'e indi (R03 cooldown, -1.107); bu satırlar varsayılan allow'a geçti. R10 düzeltmesi hiçbir kararı değiştirmedi (yukarıda). Skor etkisi (holdout): 5.644 satır (%4,8) boost alır, ortalama +0,193; tavana takılan satır 0 (fit'te 6).
+A1 sonrası R10'un bıraktığı allow'lar varsayılan allow'a geçti; skor eşiği yeniden öğrenildiği ve artık bastırılmadığı için skor kaynaklı review 633'ten 744'e çıktı. İlk sürüme göre holdout'ta kural kaynaklı review 5.621'den 4.514'e indi (R03 cooldown, -1.107); bu satırlar varsayılan allow'a geçti. R10 düzeltmesi hiçbir kararı değiştirmedi (yukarıda). Skor etkisi (holdout): 5.644 satır (%4,8) boost alır, ortalama +0,193; tavana takılan satır 0 (fit'te 6).
 
 ## Değerlendirme (holdout; yalnızca raporlama)
 Karar bazında (`decision_metrics.csv`):
@@ -269,6 +272,9 @@ Karar bazında (`decision_metrics.csv`):
 | block | 1.130 | 148 | 982 | 0,131 | 3,81 |
 | review | 5.147 | 339 | 4.808 | 0,066 | 1,91 |
 | allow | 111.831 | 3.577 | 108.254 | 0,032 | 0,93 |
+| block (A1 sonrası) | 1.130 | 148 | 982 | 0,131 | 3,81 |
+| review (A1 sonrası) | 5.258 | 349 | 4.909 | 0,066 | 1,93 |
+| allow (A1 sonrası) | 111.720 | 3.567 | 108.153 | 0,032 | 0,93 |
 
 (İlk sürüm: review 6.254 satır, FP 5.915, precision 0,054.)
 
@@ -280,11 +286,17 @@ Sıralama kırpılmamış skorla, eşitlikler Adım 5 ham toplamıyla. İlk sür
 | %1 (1.182 alarm) | Adım 6 (`adjusted_score_unclipped`) | 983 | 0,168 | 0,049 | 0,094 |
 | %1 | Adım 7 ilk sürüm | 998 | 0,156 | 0,045 | 0,079 |
 | %1 | **Adım 7 düzeltilmiş** | **998** | **0,156** | **0,045** | **0,082** |
+| %1 | Adım 6, A1 sonrası (K-55) | 987 | 0,165 | 0,048 | 0,097 |
+| %1 | **Adım 7, A1 sonrası (K-55)** | **999** | **0,155** | **0,045** | **0,086** |
 | %5 (5.906 alarm) | Adım 6 | 5.068 | 0,142 | 0,206 | 0,094 |
 | %5 | Adım 7 ilk sürüm | 5.253 | 0,111 | 0,161 | 0,079 |
 | %5 | **Adım 7 düzeltilmiş** | **5.137** | **0,130** | **0,189** | **0,082** |
+| %5 | Adım 6, A1 sonrası (K-55) | 5.037 | 0,147 | 0,214 | 0,097 |
+| %5 | **Adım 7, A1 sonrası (K-55)** | **5.128** | **0,132** | **0,191** | **0,086** |
 
-Referans: Adım 5 (`anomaly_score_norm`) %1'de FP 995, %5'te 5.222, PR-AUC 0,081. ROC-AUC 0,686 (Adım 6), 0,682 (ilk), 0,683 (düzeltilmiş).
+Referans: Adım 5 (`anomaly_score_norm`) %1'de FP 995, %5'te 5.222, PR-AUC 0,081. ROC-AUC 0,686 (Adım 6), 0,682 (ilk), 0,683 (düzeltilmiş); A1 sonrası 0,694 (Adım 6) ve 0,692 (Adım 7).
+
+**A1 sonrası (K-55):** Adım 7 Adım 6'nın hâlâ altında: %1'de FP 999 (Adım 6'ya göre +12), %5'te 5.128 (+91). A1 öncesine göre Adım 7 %1'de +1, %5'te -9 FP. Bu sonuçtan sonra da ayar yapılmadı.
 
 **Sonuç:** Düzeltilmiş kural seti de alarm sıralamasını Adım 6'nın üstüne çıkarmıyor. %1'de değişim yok (FP 998, Adım 6'ya göre +15); %5'te ilk sürüme göre 116 FP daha az (5.253 -> 5.137), ama Adım 6'ya göre hâlâ +69. Bu sonuçtan sonra başka bir ayar yapılmadı.
 
@@ -293,6 +305,7 @@ Kural çıkarma, düzeltilmiş koşu (`rule_ablation.csv`, betimleyici):
 | Varyant | PR-AUC | FP@%1 | FP@%5 |
 |---|---|---|---|
 | tüm kurallar | 0,0822 | 998 | 5.137 |
+| tüm kurallar (A1 sonrası) | 0,0858 | 999 | 5.128 |
 | R01'siz | 0,0813 | 1.051 | 5.149 |
 | R03'süz | 0,0822 | 998 | 5.134 |
 | R04'süz | 0,0870 | 1.003 | 5.083 |
@@ -304,7 +317,7 @@ Yorum (betimleyici; bu tabloya bakılarak hiçbir kural değiştirilmedi):
 - **R01 (card testing) en değerli kural:** precision 0,131 (lift 3,8). Çıkarılınca %1'de FP 998'den 1.051'e çıkıyor. Block kararlarının tamamına yakını R01'den geliyor.
 - **R03 cooldown sonrası etkisiz:** 21 tetiklenme, precision 0. Çıkarmak %5'te yalnızca 3 FP fark yaratıyor (ilk sürümde 119 fark).
 - **R04 en büyük zarar kaynağı:** holdout'un %3,1'inde tetikleniyor, lift 1,33. +0,15 boost bu satırları %5 bütçesine taşıyor. Kullanıcı kararıyla değiştirilmedi.
-- **R10 "trusted" satırları riskli:** allow verilen 3.830 holdout satırının precision'ı 0,106 (lift 3,1). Bu, Adım 6'daki bulguyla tutarlı: entity bir kart grubu (card1 + addr1, K-05) ve etiket aynı kart/e-postaya yayılıyor (varsayım 9). R10'un en yoğun entity'si de adressiz kart grubu 15885 (payı %18,5).
+- **R10 "trusted" satırları riskli (A1 öncesi):** allow verilen 3.830 holdout satırının precision'ı 0,106 (lift 3,1). A1 sonrası (K-55) 647 satır, precision 0,053 (lift 1,53); en yoğun entity holdout'ta 6019|299 (payı %12,4), fit'te 17188|299 (%19,0). Değişiklik bu metriğe bakılarak değil, etiketsiz yapı bulgusuyla yapıldı. Bu, Adım 6'daki bulguyla tutarlı: entity bir kart grubu (card1 + addr1, K-05) ve etiket aynı kart/e-postaya yayılıyor (varsayım 9). R10'un en yoğun entity'si de adressiz kart grubu 15885 (payı %18,5).
 
 ## EDA tutarlılık kontrolü (fit ve holdout)
 **Bu tablo kural seçiminde kullanılmadı; kurallar fit EDA'sından önce uzman bilgisiyle tasarlandı. Amaç, fit'te görülen zayıflığın holdout'ta tekrar edip etmediğini göstermek.** Metrikler `src/evaluation/rule_metrics.py` (`rule_hit_metrics`, `lift_by_group`) ile hesaplandı. Dosyalar: `reports/rules/eda_fit_vs_holdout.csv`, `reports/rules/eda_lift_by_product.csv`. Fit taban oranı %3,51, holdout %3,44.
@@ -322,6 +335,7 @@ Yorum (betimleyici; bu tabloya bakılarak hiçbir kural değiştirilmedi):
 | R08 | 3 | 0 | 1 | 0 | kapsam ihmal edilebilir |
 | R09 | 472 | **1,51** | 62 | 9,84 | iki dönem tutarsız (holdout n=62) |
 | R10 | 7.350 | 2,26 | 3.830 | 3,07 | "trusted" iki dönemde de ortalamadan riskli |
+| R10 (A1 sonrası) | 883 | 1,81 | 647 | 1,53 | hâlâ ortalamanın üstünde ama daha az |
 | R11 | 4 | (n=4) | 0 | - | ölçülemez |
 | R12 | 1.300 | 0,59 | 0 | - | fit'te ters yön; holdout'ta sezon yok |
 
@@ -364,6 +378,18 @@ Kurallar bu tablo nedeniyle değiştirilmedi. **Gelecek iş:** kurallar ayrı bi
 1. **R10 / kural 4 (mantık hatası):** İlk sürümde allow, skor eşiğinden gelen review'u ezebiliyordu ve düşük öncelikli bir block'a karşı kazanabiliyordu. Artık allow yalnızca kural kaynaklı, daha düşük öncelikli review'u bastırabilir (Conflict resolution, kural 4). Mevcut veride hiçbir satırın kararı değişmedi.
 2. **R03 cooldown (tetiklenme yoğunlaşması):** Etiketsiz yoğunlaşma metriği, ilk sürümde R03'ün holdout tetiklenmelerinin %99,6'sının tek bir entity'den geldiğini gösterdi: patlamadaki her işlem kuralı yeniden tetikliyordu. Cooldown ile tetiklenme holdout'ta 1.128'den 21'e, fit'te 53'ten 8'e indi. Holdout'ta top-1 payı 0,904 (19/21): patlama artık saatte bir uyarı üretiyor.
 
+## A1: addr1 eksik entity'de R10 yok (K-55)
+R10'a `{feature: addr1, op: is_null, value: false}` koşulu eklendi (`configs/rules.yaml`; `addr1` kural girdilerine, `inputs.raw`'a eklendi). Adım 6 C4 ile aynı tanım. Gerekçe etiketsizdir: addr1 eksikken entity anahtarı fiilen yalnızca card1 (en büyük böyle entity'de 609 cihaz, 21 e-posta alanı). Bu değişiklik **holdout sonuçları görüldükten sonra** yapıldı; metrik ne çıkarsa çıksın başka bir ayar yapılmadı.
+
+| | A1 öncesi | A1 sonrası |
+|---|---|---|
+| R10 karar veren satır, fit | 7.348 | 881 |
+| R10 karar veren satır, holdout | 3.830 | 647 |
+| R10 satırlarında addr1 eksik payı (fit / holdout) | %88,0 / %83,1 | %0 / %0 |
+| `score_review_threshold` (fit q99, yeniden öğrenildi) | 1,0696 | 1,0745 |
+
+Önce/sonra metrikleri yukarıdaki tablolarda "A1 sonrası" satırlarındadır. Test: `tests/rules/test_rules.py::test_r10_never_trusts_an_addr1_missing_entity`.
+
 ## Denetim düzeltmeleri (step-reviewer, `reports/reviews/step6_7_review.md`)
 Hepsi kullanıcı kararıdır. Tam veri yeniden koşuldu: Adım 7'nin tüm rapor dosyaları (bütçe tablosu, kural ve karar metrikleri, kapsama, örnekler) ve Adım 6'nın etiketli çıktıları önceki sürümle aynı. Yukarıdaki tablolar değişmedi.
 - **K7-1 (K-26):** skor eşiği allow'u geçersiz kılınca kurallar allow olmadan yeniden çözülür; kural review'ları ve boost'ları uygulanır, gerekçeler doğru dolar ("Karar kuralı tetiklenmedi" hatası giderildi).
@@ -395,8 +421,8 @@ Hepsi kullanıcı kararıdır. Tam veri yeniden koşuldu: Adım 7'nin tüm rapor
 - **Kurallar holdout'ta sıralamayı Adım 6'nın üstüne çıkarmıyor** (düzeltilmiş: %1'de +15, %5'te +69 FP). Ana kaynak R04 (geniş kapsam, düşük lift, ProductCD ile karışık). R01 belirgin fayda sağlıyor. Kullanıcı kararıyla R04 değiştirilmedi.
 - **Az tetiklenen kurallar:** R02 (fit 1 / holdout 1), R05 (54 / 4), R08 (3 / 1), R09 (472 / 62), R11 (4 / 0). Bu kuralların precision ve lift değerleri istatistiksel olarak güvenilir değil; R09'un holdout lift'i (9,84) fit'te tekrar etmiyor (1,51).
 - **R12 holdout'ta hiç tetiklenmiyor:** öğrenilen tatil sezonu (2017-12-19 ... 2017-12-26) fit dönemine düşüyor (Adım 6 C7 ile aynı durum). Fit'te ise lift 0,59.
-- **R10 allow kararları ortalamadan riskli** (precision 0,106). Kart grubu entity'siyle "trusted" düşük risk anlamına gelmiyor. Allow artık skor incelemesini ve block'u ezemiyor, ama kural kaynaklı düşük öncelikli review'ları hâlâ bastırabiliyor.
-- **Entity proxy:** `addr1` boş olan satırlar tek bir seviyede toplanıyor. R01 ve R10'un en yoğun entity'si bu birleşik grup (card1 15885). Bu, cooldown ve yoğunlaşma metriğini de etkiliyor.
+- **R10 allow kararları ortalamadan riskli** (A1 öncesi precision 0,106; A1 sonrası 0,053, lift 1,53). Kart grubu entity'siyle "trusted" düşük risk anlamına gelmiyor. Allow artık skor incelemesini ve block'u ezemiyor, ama kural kaynaklı düşük öncelikli review'ları hâlâ bastırabiliyor.
+- **Entity proxy:** `addr1` boş olan satırlar tek bir seviyede toplanıyor. R01'in en yoğun entity'si bu birleşik grup (card1 15885). A1 (K-55) ile R10 bu entity'lerde artık tetiklenmiyor (önce R10 tetiklenmelerinin fit'te %88,0, holdout'ta %83,1'i bu entity'lerdendi). Bu, cooldown ve yoğunlaşma metriğini de etkiliyor.
 - **Cooldown durumu bellek içi ve tek süreçli;** süreç yeniden başlarsa sıfırlanıyor; pencereden eski, sıra dışı gelen işlem silinmiş fire'ları göremez. Batch'te durum boş başlıyor ve tüm veriyi (TransactionDT, TransactionID) sırasıyla işliyor. Gelecek iş: ayrı işlem kaydı endpoint'i ve kalıcı store.
 - **Boost değerleri elle seçildi;** sonuç bunlara duyarlı. Güven aralığı hesaplanmadı ve yalnızca tek bir holdout var.
 - Kural kararı ile bütçe sıralaması ayrı kavramlar: %5 bütçedeki alarmların bir kısmı varsayılan allow kararlı (hiçbir kural tetiklenmemiş ve skor eşiğin altında). Karar eşiği fit q99, bütçe ise holdout'un %5'i.

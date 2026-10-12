@@ -100,7 +100,20 @@ RuleAgent kural motorunu `update_state=False` ile çağırır: agent yolu K-27 o
 - RAG cevabı boşsa, `null` ise (LLM yok) ya da yalnızca kaynak satırıysa şablon açıklama kullanılır: karar nedeni (`reasons`), en yüksek katman skorları, uygulanan C kuralları. Trace'e `explanation_fallback` yazılır; çıktı `origin="template"` ve yine "destek bilgisi" etiketlidir, karara etkisi yoktur.
 
 ## Gerçek demo (`make agents-demo`)
-Holdout'tan kural motorunun batch kararına göre üç işlem seçilir (her karar grubunun ortadaki TransactionID'si; cooldown tarafından elenmiş satırlar atlanır, çünkü online depo boştur) ve hazır kayıtla gönderilir. Dördüncü çalıştırma (K-54) ham bir işlemdir: `examples/requests/review.json` (TransactionID 91000001); kaydı FeatureAgent üretir. Gerçek Ollama (qwen2.5:7b, bge-m3) ile çalıştırıldı (2026-10-12, K-54 sonrası yeniden üretim); dördünde de online karar beklenen batch kararıyla aynı çıktı. Dosyalar: `reports/agents/trace_{block,review,allow}_<id>.json`, `trace_raw_review_91000001.json`, `summary.json`.
+Holdout'tan kural motorunun batch kararına göre üç işlem seçilir (her karar grubunun ortadaki TransactionID'si; cooldown tarafından elenmiş satırlar atlanır, çünkü online depo boştur) ve hazır kayıtla gönderilir. Dördüncü çalıştırma (K-54) ham bir işlemdir: `examples/requests/review.json` (TransactionID 91000001); kaydı FeatureAgent üretir. Gerçek Ollama (qwen2.5:7b, bge-m3) ile çalıştırıldı. Son üretim K-55 (A1) sonrasıdır; A1 karar dağılımını değiştirdiği için (skor kaynaklı review 633 -> 744) review ve allow gruplarının ortadaki işlemi değişti (3519086 -> 3519443, 3517771 -> 3517753). Dosyalar: `reports/agents/trace_{block,review,allow}_<id>.json`, `trace_raw_review_91000001.json`, `summary.json`.
+
+**K-55 sonrası koşu (güncel):**
+
+| TransactionID | Girdi | Soru / plan | Online karar | Batch karar | Tetiklenen | Context | Süre |
+|---|---|---|---|---|---|---|---|
+| 3522622 | kayıt | yok / varsayılan | block (R01) | block | R01 | C3, C6b | 103,6 sn |
+| 3519443 | kayıt | "incele ve inceleme notu yaz" / LLM: rule, explainer | **allow** | **review (skor eşiği)** | - | C2, C3, C8, C9b | 69,4 sn (plan 15,6 sn) |
+| 3517753 | kayıt | "sadece karar" / LLM planı reddedildi -> varsayılan | allow | allow | - | C1 | 84,1 sn (plan 7,9 sn) |
+| 91000001 | ham işlem | yok / varsayılan | review (R04) | review | R04 | C3, C8, C9b | 81,4 sn (featurize 0,9 sn) |
+
+**3519443'te online ve batch kararı farklı.** Neden A1 değil, Adım 4'teki bilinen replay sınırı: saat geçmişi deposu tüm veriden kurulduğu için geçmiş bir işlemin online temporal skoru batch'ten farklıdır. Bu işlemde batch `anomaly_score` 0,905 / `adjusted_score_unclipped` 1,080 (eşik 1,075'in üstünde -> review); online 0,874 / 1,043 (eşiğin altında -> allow). Fark temporal katmandan gelir (batch katkısı 0,194 -> skor ~0,97; online 0,833). Yeni işlemler için batch = online eşitliği geçerli ve testlidir; demo seçimi bu sınırı hesaba katmıyor.
+
+**K-54 koşusu (A1 öncesi, kayıt için):** dördünde de online karar beklenen batch kararıyla aynıydı.
 
 | TransactionID | Girdi | Soru / plan | Karar | Tetiklenen | Context | Süre |
 |---|---|---|---|---|---|---|
@@ -111,7 +124,7 @@ Holdout'tan kural motorunun batch kararına göre üç işlem seçilir (her kara
 
 3517771'de LLM yalnızca `rule:evaluate` planladı; K-51 gereği soru varsa açıklama adımı zorunlu olduğu için plan reddedildi ve trace'e `plan_fallback` ("plan has no explanation step although the analyst asked a question") yazıldı. Önceki koşudaki (K-51 öncesi) 3,7 sn'lik "yalnızca karar" sonucu artık geçerli değil. Süreler önceki koşudan uzundur (açıklama 66-96 sn): `num_predict` sınırı ve modelin o anki yükü etkiler; ölçüm tek koşudur.
 
-Örnek trace (TransactionID 3519086, LLM planı `rule:evaluate -> explainer:explain`; `rule` eksik skoru zincirle aldı):
+Örnek trace (K-54 koşusu; bu işlemin trace dosyası K-55 sonrası demo başka bir işlem seçtiği için repodan kaldırıldı, git geçmişinde duruyor; TransactionID 3519086, LLM planı `rule:evaluate -> explainer:explain`; `rule` eksik skoru zincirle aldı):
 ```
 1. client      -> coordinator  analyze   [ok] 106961 ms
 2. coordinator -> rule         evaluate  [ok]    178 ms

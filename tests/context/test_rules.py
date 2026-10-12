@@ -68,6 +68,8 @@ def test_neutral_record_is_unchanged(engine, neutral):
         {"email_ent_known": 0},  # device alone is not enough
         {"ent_txn_count": 19},  # below the learned history threshold
         {"ent_age_days": 29.0},  # younger than 30 days
+        {"addr1": float("nan")},  # K-55: addr1-missing entity is card1 only, never trusted
+        {"addr1": None},
     ],
 )
 def test_c4_needs_every_clause(engine, neutral, change):

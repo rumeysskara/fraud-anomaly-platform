@@ -4,6 +4,8 @@
 
 **Tasarımın kaynağı:** Kural listesi, koşullar ve katsayılar kullanıcının verdiği tasarımdır (zaman kısıtı nedeniyle bu adımda seçenek turu yapılmadı). Uygulamada yapılan küçük uyarlamalar aşağıda "Tasarımdan sapmalar" bölümündedir.
 
+> **K-55 (A1, en güncel):** C4'e `addr1` dolu koşulu eklendi; addr1 eksik entity'ler artık güvenilir sayılmaz. Sayılar ve önce/sonra satırları aşağıdaki "A1 sonrası" bölümünde ve tablolardaki "A1 sonrası" satırlarındadır. Bu değişiklik holdout sonuçları görüldükten sonra yapıldı; gerekçesi etiketsizdir.
+
 > **Güncel durum:** Bu doküman önce ilk tasarımı ve holdout sonucunu, sonra **"Düzeltme"** bölümünde holdout'ta fark edilen sorunun tanım ilkesine dayalı (etiketle değil) düzeltmesini anlatır. İlk tasarımın sonuçları silinmedi (`reports/context/initial_design/`). Üretimde geçerli olan revize tasarımdır: C4 yeniden tanımlandı, C6/C9 dışlayıcı grup, sıralama kırpılmamış skorla, öğrenilmiş parametreler `artifacts/context/`.
 
 ## Ne yapıldı
@@ -61,7 +63,8 @@ Tetiklenme payı: kuralın skoru değiştirdiği satırların payı (etiketsiz).
 | C2 | `is_low_volume_window = 1`, tutar >= fit q90 | x1,15 | Herkes uyurken büyük tutar: hesap ele geçirme kalıbı | %0,34 / %0,48 | %0,34 / %0,48 |
 | C3 | `is_weekend = 1`, `ent_txn_count >= 5` | x0,95 | Yerleşik entity'de hafta sonu alışverişi olağandır (referans tarih 2017-12-01 varsayımı) | %23,8 / %25,5 | %23,8 / %25,5 |
 | C4 (ilk) | `ent_txn_count >= 20`, `abs_amt_zscore_ent <= 2`, `known_device_or_email = 1` | x0,75 | Uzun geçmiş + kendi normal tutarı + tanıdık cihaz/e-posta: geri dönen müşteri | %47,8 / %61,1 | - (yerini revize aldı) |
-| C4 (revize, güncel) | `ent_txn_count >=` fit q90 (809), `ent_age_days >= 30`, `abs_amt_zscore_ent <= 2`, `known_device = 1` VE `known_email = 1` | x0,75 | Aynı gerekçe; "güvenilir" küçük bir azınlık olmalı (Düzeltme bölümü) | - | %2,0 / %4,0 |
+| C4 (revize) | `ent_txn_count >=` fit q90 (809), `ent_age_days >= 30`, `abs_amt_zscore_ent <= 2`, `known_device = 1` VE `known_email = 1` | x0,75 | Aynı gerekçe; "güvenilir" küçük bir azınlık olmalı (Düzeltme bölümü) | - | %2,0 / %4,0 |
+| C4 (A1 sonrası, güncel, K-55) | revize koşullar + `addr1` dolu | x0,75 | addr1 eksikken entity anahtarı fiilen yalnızca card1; güven tanımlı bir kart grubuna verilir | - | %0,19 / %0,55 |
 | C5 | `ent_txn_count >= 5`, `ent_daily_avg >= 1`, `burst_ratio_24h <= 3` | temporal ağırlığı x0,5 (yalnızca skoru düşürürse) | Sık işlem yapan entity için yüksek velocity normal ritimdir (Adım 5: temporal üst %1'in %96'sı tek entity burst'ü) | %31,6 / %28,4 (ort. x0,88 / x0,87) | aynı |
 | C6a | `addr2` dolu ve != fit baskın değeri (87) | x1,20 | Sınır ötesi işlem (addr2 = 87 = ABD varsayımı) | %0,83 / %0,36 | %0,83 / %0,36 |
 | C6b | `addr2` boş ve `amt_has_3dec = 1` | x1,10 | Ülkesi bilinmeyen + kur çevrimi görünümlü tutar | %10,2 / %9,1 | %10,2 / %9,1 |
@@ -175,21 +178,26 @@ Yapılan dört değişiklik (kullanıcı talebi):
 | `abs_amt_zscore_ent <= 2` | %92,9 | %94,2 |
 | `known_device = 1` | %13,2 | %12,4 |
 | `known_email = 1` | %69,6 | %75,3 |
-| **hepsi birlikte (C4)** | **%2,0** | **%4,0** |
+| **hepsi birlikte (C4, A1 öncesi)** | **%2,0** | **%4,0** |
+| `addr1` dolu (K-55) | %88,6 | %89,9 |
+| **hepsi birlikte (C4, A1 sonrası)** | **%0,19** | **%0,55** |
 
 **Hedef %10-15'in altında; olduğu gibi raporlanıyor.** Bağlayıcı koşul `known_device`: cihaz bilgisi yalnızca identity kaydı olan işlemlerde var (fit satırlarının %13,2'sinde bilinen cihaz). Etiketsiz tek ayar kolu q seviyesidir; fit kapsamına bakarak (etiketsiz) denendi: q = 0,85 -> %2,6, 0,80 -> %3,0, 0,75 -> %3,3. Makul bir q seviyesi %10'a ulaşmadığı için q = 0,90 (tasarımdaki değer) korundu. Holdout'ta kapsamın iki katına çıkması ömür boyu sayaçların zamanla büyümesinden kaynaklanır (K-18); eşik fit'te sabitlendiği için holdout'ta daha çok entity eşiği aşar.
 
 Örneklem (SAMPLE_N=50000): q90 = 51; örneklem ~2 hafta olduğu için `ent_age_days >= 30` hiç sağlanmaz ve C4 tetiklenmez (fit ve holdout %0). Yalnızca duman testidir.
 
-### Önce / sonra: üç satır (TAM veri, holdout, `reports/context/fp_comparison.csv`)
+### Önce / sonra (TAM veri, holdout, `reports/context/fp_comparison.csv`)
+A1 satırları güncel `fp_comparison.csv`'deki "revised design" satırlarıdır; A1 öncesi revize satırlar bu commit'ten önceki sürümden alındı ve silinmedi.
 | Bütçe | Skor | Alarm | FP | Precision | Recall | PR-AUC |
 |---|---|---|---|---|---|---|
 | %1 | Adım 5 (`anomaly_score_norm`) | 1.182 | 995 | 0,158 | 0,046 | 0,081 |
 | %1 | ilk tasarım (kırpılmış sıralama + ham eşitlik kırıcı) | 1.182 | 1.040 | 0,120 | 0,035 | 0,078 |
 | %1 | **revize tasarım** | 1.182 | **983** | **0,168** | **0,049** | **0,094** |
+| %1 | **A1 sonrası (K-55)** | 1.182 | **987** | **0,165** | **0,048** | **0,097** |
 | %5 | Adım 5 | 5.906 | 5.222 | 0,116 | 0,168 | 0,081 |
 | %5 | ilk tasarım | 5.906 | 5.291 | 0,104 | 0,151 | 0,078 |
 | %5 | **revize tasarım** | 5.906 | **5.068** | **0,142** | **0,206** | **0,094** |
+| %5 | **A1 sonrası (K-55)** | 5.906 | **5.037** | **0,147** | **0,214** | **0,097** |
 
 Revize tasarım Adım 5'e göre FP'yi %1'de 12 (-%1,2), %5'te 154 (-%2,9) azaltır; recall %1'de 0,046 -> 0,049, %5'te 0,168 -> 0,206. ROC-AUC 0,683 -> 0,686. İlk tasarımın sayıları `reports/context/initial_design/fp_impact.csv` dosyasından okunur (korunmuş sonuç; yeniden hesaplanmadı).
 
@@ -214,6 +222,7 @@ Kırpılmamış sıralamada kesimlerde eşitlik yok (1 = yalnızca kesimdeki sat
 |---|---|---|---|---|---|---|---|
 | bağlam yok (Adım 5) | 0,081 | 0,158 | 0,046 | 995 | 0,116 | 0,168 | 5.222 |
 | tüm kurallar (revize) | 0,094 | 0,168 | 0,049 | 983 | 0,142 | 0,206 | 5.068 |
+| tüm kurallar (A1 sonrası, K-55) | 0,097 | 0,165 | 0,048 | 987 | 0,147 | 0,214 | 5.037 |
 | C1'siz | 0,095 | 0,180 | 0,052 | 969 | 0,146 | 0,212 | 5.044 |
 | C2'siz | 0,098 | 0,183 | 0,053 | 966 | 0,144 | 0,209 | 5.055 |
 | C3'süz | 0,097 | 0,206 | 0,060 | 939 | 0,144 | 0,209 | 5.057 |
@@ -233,6 +242,27 @@ Kırpılmamış sıralamada kesimlerde eşitlik yok (1 = yalnızca kesimdeki sat
 - C3, C1 ve C2 çıkarıldığında metrikler iyileşiyor (en belirgin C3: %1'de FP 983 -> 939). Etiketle ayar yasağı nedeniyle değiştirilmedi (kullanıcı kararı, K-20b; bkz. Bilinen sınırlar).
 - C5 ve C7 etkisiz (nedenler ilk tasarım bölümünde); koruma %5'te küçük fayda (5.072 -> 5.068); sınırlar sıralamayı değiştirmiyor.
 
+### A1 sonrası: addr1 eksik entity'ler güvenilir sayılmaz (K-55)
+**Ne değişti:** C4'e `{feature: addr1, op: notna}` koşulu eklendi (yalnızca `configs/context.yaml`; context girdilerine `addr1` eklendi). Adım 7'de R10'a aynı koşul eklendi.
+
+**Neden (etiketsiz):** addr1 eksikken entity anahtarı `card1|__NA__` olur, yani fiilen yalnızca card1'dir ve birçok kartı birleştirir. 2.443 böyle entity var, satırların %11,1'i. En büyüğü (15885|NA) 9.928 işlem, 609 farklı DeviceInfo ve 21 farklı P_emaildomain içerir. Bu yüzden orada "bilinen cihaz VE bilinen e-posta" neredeyse her zaman doğrudur. A1 öncesinde C4 tetiklenmelerinin %90,7'si (fit) ve %86,1'i (holdout) bu entity'lerden geliyordu; 12-18 entity'de toplanıyordu.
+
+**Zamanlama:** Bu değişiklik holdout sonuçları görüldükten sonra yapıldı. Gerekçe etiketsiz bir yapı bulgusudur; metrik ne çıkarsa çıksın başka bir ayar yapılmadı.
+
+| | A1 öncesi | A1 sonrası |
+|---|---|---|
+| C4 tetiklenme, fit | 9.663 (%2,05) | 894 (%0,19) |
+| C4 tetiklenme, holdout | 4.706 (%3,98) | 654 (%0,55) |
+| C4 tetiklenmelerinde addr1 eksik payı (fit / holdout) | %90,7 / %86,1 | %0 / %0 |
+| Kırpılmış skoru = 1,0 olan holdout satırı | 2.682 | 3.762 |
+| Alarm profili %1: uzun geçmişli / ilk görülen | 719 / 102 | 839 / 80 |
+| Alarm profili %5: uzun geçmişli / ilk görülen | 4.207 / 381 | 4.543 / 316 |
+| ROC-AUC (holdout) | 0,686 | 0,694 |
+
+Holdout etkisi (yukarıdaki önce/sonra tablosu): %1'de FP 983 -> 987 (+4), %5'te 5.068 -> 5.037 (-31); PR-AUC 0,094 -> 0,097. Değişimler küçük ve tek holdout üzerindedir. Örneklem koşusunda C4 zaten hiç tetiklenmiyordu (`ent_age_days >= 30` sağlanmaz); örneklem sonuçları değişmedi, yalnızca `c4_coverage.csv`'ye yeni koşul satırı eklendi.
+
+Test: `tests/context/test_rules.py::test_c4_needs_every_clause` addr1 = NaN ve None durumlarında C4'ün tetiklenmediğini doğrular.
+
 ### Düzeltmede eklenen testler
 C4'ün her koşulunun tek tek gerekli olması (yalnızca e-posta / yalnızca cihaz / eşik altı geçmiş / 30 günden genç), C6/C9 dışlayıcı grubu (eşit çarpanda ilk kural, büyük çarpan kazanır, tek kural korunur), kırpılmamış skorun 1'i aşabilmesi ve `raw x total` eşitliği, batch = tek kayıt eşitliğinde kırpılmamış skor, `trusted_min_history` öğrenimi.
 
@@ -247,9 +277,9 @@ C4'ün her koşulunun tek tek gerekli olması (yalnızca e-posta / yalnızca cih
 
 ## Bilinen sınırlar
 - **C1, C2, C3 holdout ablation'da zararlı göründü** (çıkarılınca %1'de FP 983 -> 969 / 966 / 939). Etiketle ayar yasağı nedeniyle değiştirilmedi (kullanıcı kararı, K-20b). Doğru yöntem: bu kuralları holdout'tan ayrı bir doğrulama döneminde (ör. fit'in son dilimi veya yeni bir zaman penceresi) test etmek ve karar orada vermek; holdout yalnızca son raporlama içindir.
-- **C4 kapsamı hedefin altında:** fit %2,0 / holdout %4,0 (hedef %10-15). Sınırlayan koşul "bilinen cihaz" (identity kaydı olan işlemlerle sınırlı). Tanım (VE) kullanıcı kararıyla korundu (K-20b).
+- **C4 kapsamı hedefin altında:** A1 sonrası fit %0,19 / holdout %0,55 (A1 öncesi %2,0 / %4,0; hedef %10-15). Sınırlayan koşul "bilinen cihaz" (identity kaydı olan işlemlerle sınırlı). Tanım (VE) kullanıcı kararıyla korundu (K-20b).
 - **Revize sonuçtaki iyileşme küçük** (%1'de -12, %5'te -154 FP) ve tek bir holdout üzerinde; güven aralığı hesaplanmadı. Sonuç etiketsiz bir tanım düzeltmesinden gelse de sorun holdout sonucunda fark edildi (K-20a).
-- 1,0'da yığılma (gösterim): revize tasarımda 2.682 holdout satırı; sıralama kırpılmamış skorla yapıldığı için kesimde eşitlik yok.
+- 1,0'da yığılma (gösterim): revize tasarımda 2.682, A1 sonrası 3.762 holdout satırı; sıralama kırpılmamış skorla yapıldığı için kesimde eşitlik yok.
 - İlk tasarıma ait sınırlar (C4'ün holdout'un %61'ini "güvenilir" sayması, C6b + C9a çift sayımı, 1,0'da 2.006 satır ve eşitlik kırıcıya bağımlı sıralama) düzeltmede giderildi; kayıt için yukarıdaki ilk tasarım bölümlerinde duruyor.
 - C7 holdout'ta ölçülemez (sezon fit'te); C5 Adım 5'teki burst entity'sini hedeflediği halde onu yakalamaz (burst kendi geçmişine göre gerçek bir değişim).
 - Saat dilimi, hafta sonu, addr2 = ABD, 3 ondalık = kur çevrimi ve D1 = kart yaşı varsayımdır (docs/assumptions.md 1-7); C1, C2, C3, C6, C8 bunlara bağlıdır.

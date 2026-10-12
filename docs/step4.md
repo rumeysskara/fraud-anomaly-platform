@@ -50,6 +50,7 @@ Beş alt skor, eşit ağırlık (config): velocity, inter-arrival kısalığı, 
 - Temporal katman diğerleriyle zayıf korelasyonlu, entity ve column ile hafif negatif (tam veri Spearman fit: -0,10 ... 0,27; entity-temporal -0,10, column-temporal -0,01): bağımsız bir sinyal olabilir ama sezonsal etkiler de olabilir.
 - Column listesinden hangi C/D'nin seçildiği bir tercihtir.
 - `hour`, `local_hour_est` referans-tarih ve yerel saat varsayımlarına bağlıdır (Adım 3).
+- **Entity tutar z-skoru (K-56):** Az geçmişli ve tutarları sabit entity'lerde std ~0 olduğundan z-skoru çok büyüyebiliyor (fit'te |z|>50: 1.464 satır). Katmanlar rank tabanlı olduğu için skor patlamıyor ve C4/R10 etkilenmiyor. Gelecek iş: göreli std tabanı max(std, 1 USD, 0,1 × |ortalama|). Ayrıntı: `amt_zscore_ent` paydası `max(std, 1 USD)` (`configs/entity.yaml` `z_std_floor`); entity katmanı z'yi kendisi `std > 0` kontrolüyle yeniden hesaplar, bu yüzden 4,8e-7 gibi float gürültüsü std'ler tabana takılmaz. |z|>50 satırlarının %75'inde std <= 1 ve geçmiş medyanı 2 işlemdir. C4/R10 en az 809 geçmiş işlem istediği için bu satırlara dokunmaz. Uygulanmadı (kullanıcı kararı).
 - Sinyal gücü zayıf: tek katman PR-AUC 0,046-0,088 (tam veri holdout taban oranı %3,44). Denetimsiz skorlarda beklenen düzey; ağırlıklar bu sonuçlara göre değiştirilmedi.
 
 ## Bir sonraki adımın girdisi
