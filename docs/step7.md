@@ -1,6 +1,6 @@
 # Adım 7 - Configurable Rule Engine
 
-**isFraud kullanıldı mı: hayır - yalnızca evaluation'da raporlama.** Kural koşulları, eşikler, risk artışları ve öncelikler etiketle seçilmedi. Eşikler fit kümesinin (TransactionDT'ye göre ilk %80) yüzdelikleridir. `src/rules/`, `scripts/run_rules.py` ve `configs/rules*.{yaml,json}` içinde `isFraud` geçmez (testle ve grep ile kontrol edildi). Etiket loader'dan ayrı bir Series olarak gelir ve yalnızca `src/evaluation/rule_metrics.py` ile `src/evaluation/metrics.py` fonksiyonlarının içinde kullanılır; script bu fonksiyonlara etiketsiz maskeler ve skorlar verir. Holdout sonucundan sonra yapılan iki düzeltme (R10, R03) etiketten bağımsız gerekçelere dayanır ve "Düzeltmeler" bölümünde şeffaflık için ayrıca anlatılır (K-25).
+**isFraud kullanıldı mı: hayır - yalnızca evaluation'da raporlama.** Kural koşulları, eşikler, risk artışları ve öncelikler etiketle seçilmedi. Eşikler fit kümesinin (TransactionDT'ye göre ilk %80) yüzdelikleridir. `src/rules/`, `scripts/run_rules.py` ve `configs/rules*.{yaml,json}` içinde `isFraud` geçmez (testle ve grep ile kontrol edildi). Etiket loader'dan ayrı bir Series olarak gelir ve yalnızca `src/evaluation/rule_metrics.py` ile `src/evaluation/metrics.py` fonksiyonlarının içinde kullanılır; script bu fonksiyonlara etiketsiz maskeler ve skorlar verir. Holdout sonucundan sonra yapılan iki düzeltme (R10, R03) etiketten bağımsız gerekçelere dayanır ve "Düzeltmeler" bölümünde şeffaflık için ayrıca anlatılır (K-25). Step-reviewer denetiminden sonraki düzeltmeler (K-26, K-27) skorları ve sayıları değiştirmedi; "Denetim düzeltmeleri" bölümüne bakın.
 
 **Tasarımın kaynağı:** Kural listesi (R01-R12), şema, conflict resolution sırası ve skor formülü kullanıcının verdiği tasarımdır (zaman kısıtı nedeniyle bu adımda seçenek turu yapılmadı). Boost değerleri geliştirme sırasında önerildi, sonra kullanıcı onayladı (K-23). R10 ve R03 düzeltmeleri ve EDA tutarlılık kontrolü kullanıcı kararıdır (K-25).
 
@@ -26,20 +26,20 @@ Batch (parquet) ve online (tek kayıt) yolu aynı fonksiyonları kullanır: tek 
 | `configs/rules_extra.json` | R11, R12 (JSON desteğinin kanıtı) |
 | `src/rules/schema.py` | pydantic v2 şeması: `Rule`, `Action`, `Cooldown`, iç içe `all`/`any`/`not` düğümleri, `Clause` |
 | `src/rules/conditions.py` | koşul dilinin vektörel değerlendirmesi |
-| `src/rules/cooldown.py` | `apply_cooldown` (batch ve online ortak), `CooldownStore` (online durum) |
+| `src/rules/cooldown.py` | `apply_cooldown` (batch ve online ortak), `CooldownStore` (online durum: yakın tarihli fire'lar ve işlenmiş TransactionID'ler, pencere dışı kayıtlar silinir) |
 | `src/rules/repository.py` | `RuleRepository` (YAML + JSON yükleme, `reload()`, istekte gelen kural seti için `parse()`), ad doğrulaması |
 | `src/rules/params.py` | fit yüzdelikleri, dış parametre (Adım 6 artifact'ı), `learned:` bloğunu yazma |
 | `src/rules/derive.py` | türetilmiş kolonlar ve batch girdisi |
 | `src/rules/resolver.py` | conflict resolution |
 | `src/rules/explain.py` | mesaj şablonlarını doldurma |
 | `src/rules/engine.py` | `RuleEngine` (`RuleEvaluator` arayüzü): `evaluate_batch`, `evaluate(record, score, rules=None, update_state=True)`, `RuleEngineResult` |
-| `src/rules/factory.py` | `load_rule_engine` (container bunu kullanır; eğitim yapmaz) |
+| `src/rules/factory.py` | `load_rule_engine(repository, cooldown_store)` (container bunu kullanır; eğitim yapmaz; `reload()` için parametre yükleyicisini motora verir) |
 | `src/rules/report.py` | etiketsiz rapor yardımcıları (kapsama, entity yoğunlaşması, karar dağılımı, örnek seçimi) |
 | `src/evaluation/rule_metrics.py` | etiketli metrikler: `rule_hit_metrics`, `decision_metrics`, `budget_table`, `lift_by_group` |
 | `scripts/run_rules.py` | uçtan uca çalıştırma (`SAMPLE_N` destekli), `--no-eval` |
-| `tests/rules/` (93 test), `tests/evaluation/test_rule_metrics.py` (4 test) | sentetik veriyle testler |
+| `tests/rules/` (103 test), `tests/evaluation/test_rule_metrics.py` (4 test) | sentetik veriyle testler |
 
-Ortak dosyalara yalnızca ekleme yapıldı: `src/core/interfaces.py`'ye `RuleStore` (reload / parse) ABC'si; `src/container.py`'ye `rule_repository` ve `rule_engine` Singleton'ları. `scripts/run_pipeline.py` içindeki `rules` adımı `scripts/run_rules.py`'yi çalıştırır.
+Ortak dosyalara yalnızca ekleme yapıldı: `src/core/interfaces.py`'ye `RuleStore` (reload / parse) ABC'si; `src/container.py`'ye `rule_repository`, `cooldown_store` ve `rule_engine` Singleton'ları. `rule_engine` store'u `cooldown_store` provider'ından alır (motor kendi store'unu oluşturmaz; testlerde `container.cooldown_store.override(...)`). `scripts/run_pipeline.py` içindeki `rules` adımı `scripts/run_rules.py`'yi çalıştırır.
 
 ## Kural şeması
 ```yaml
@@ -144,10 +144,16 @@ Gerekçeler (iş mantığı):
 
 ## Cooldown (R03)
 - **Tanım:** Bir satırdaki ham tetiklenme, aynı entity'nin son *tutulan* tetiklenmesi en az `window_seconds` (3.600) önceyse tutulur; değilse düşer ve satırın `cooldown_rules` listesine yazılır. Yalnızca önceki satırlara bakar (geçmiş). Düşen kural conflict resolution'a girmez, boost almaz; açıklamada `suppressed_rules` içinde "cooldown: aynı entity için son 3600 sn içinde zaten tetiklendi" nedeniyle görünür.
-- **Batch:** `apply_cooldown` satırları TransactionDT sırasıyla (eşitlikte satır sırasıyla) gezer, boş bir durumla başlar ve tüm veriyi (fit + holdout) işler. Bu, Adım 3'ün geçmiş feature'larıyla aynı yaklaşımdır.
-- **Online: stateful (durumlu), stateless (durumsuz) türetme değil.** "Son tutulan tetiklenme" bir önceki kararın sonucuna bağlıdır; features.parquet'teki pencere sayılarından türetilemez. Bu yüzden motor, (kural, entity) başına son tetiklenme zamanını tutan bir `CooldownStore` alır. `evaluate()` aynı `apply_cooldown` fonksiyonunu tek satırla bu durum üzerinde çağırır ve tetiklenince durumu günceller. `update_state=False` durumu değiştirmeden değerlendirir. Kural cooldown kullanıyorsa kayıt `TransactionDT`, `card1`, `addr1` alanlarını taşımalıdır.
-- **Parity kontrolü:** Script her kontrol satırı için online durumu, batch çıktısındaki o entity'nin satırdan önceki son tutulan R03 tetiklenmesiyle kurar ve tek kayıt yolunu çalıştırır. 250 satırda, cooldown'a takılan 50 satır dahil, fark 0. `tests/rules/test_cooldown.py` sıralı bir patlamayı online yoldan yeniden oynatıp batch ile aynı sonucu aldığını doğrular.
-- **Sınır:** `CooldownStore` bellek içidir ve tek süreçte çalışır. Çok süreçli bir API için paylaşılan bir depo (ör. Redis) gerekir. Süreç yeniden başlarsa durum sıfırlanır.
+- **"Önce" tanımı (aynı TransactionDT):** sıra her yerde (TransactionDT, TransactionID). Aynı saniyedeki iki işlemden TransactionID'si küçük olan "geçmiş" sayılır. `apply_cooldown` bunu `np.lexsort((ids, times))` ile, `email_ent_known` (`src/context/inputs.py`) da aynı şekilde açıkça uygular. Veride TransactionDT monoton ve TransactionID artan (17.191 aynı-saniye çifti var); yani eski "kararlı sıralama" ile sonuç aynıdır, kontrol edildi ve sayılar değişmedi. Adım 3'ün pencere sayıları aynı satır sırasını kullanır.
+- **Batch:** `apply_cooldown` tüm veriyi (fit + holdout) bu sırayla, boş bir durumla işler; online store'a dokunmaz.
+- **Online: stateful (durumlu), stateless (durumsuz) türetme değil.** "Son tutulan tetiklenme" önceki kararlara bağlıdır; features.parquet'teki pencere sayılarından türetilemez. Motor, container'dan inject edilen bir `CooldownStore` kullanır (K7-2). Store şunları tutar: (kural, entity) başına yakın tarihli tutulan fire'lar ve işlenmiş TransactionID'ler. `evaluate()` durumu "bu işlemden önce" olarak kurar (yalnızca (zaman, id) sırası daha önce olan fire'lar) ve aynı `apply_cooldown` fonksiyonunu çağırır. Kurallar (K-27):
+  - **Yüklü kural seti** durumu TransactionID başına **yalnızca bir kez** günceller (idempotent). Aynı işlem iki kez değerlendirilince aynı sonuç döner; çünkü işlemin kendi fire'ı "önce" sayılmaz ve ikinci çağrı store'a yazmaz.
+  - **İstekte gelen kural setleri** (`rules=`) durumu **okur ama hiç yazmaz**.
+  - `update_state=False` yüklü set için de salt okunur değerlendirme yapar.
+  - **Bellek sınırı:** her kayıtta, görülen en yeni zamandan `window_seconds` daha eski fire'lar ve işlenmiş ID'ler silinir. Store yalnızca son bir pencerelik trafiği tutar.
+  - Kural cooldown kullanıyorsa kayıt `TransactionID`, `TransactionDT` ve entity kolonlarını (`configs/entity.yaml`: `card1`, `addr1`) taşımalıdır.
+- **Parity kontrolü:** Script her kontrol satırı için ayrı bir motor kurar. Bu motorun store'u, batch çıktısındaki o entity'nin satırdan önceki son tutulan R03 fire'ıyla doldurulur; tek kayıt yolu salt okunur çalıştırılır. 250 satırda (cooldown'a takılan 50 satır dahil) fark 0. `tests/rules/test_cooldown.py` sıralı bir patlamayı online yoldan yeniden oynatıp batch ile aynı sonucu aldığını doğrular.
+- **Sınır:** store bellek içidir ve tek süreçte çalışır; süreç yeniden başlarsa sıfırlanır. Pencereden daha eski bir işlem geç gelirse (sıra dışı), silinmiş fire'ları göremez. **Gelecek iş: ayrı işlem kaydı endpoint'i ve kalıcı store.** Böylece durumu yalnızca "işlemi kaydeden" endpoint günceller, sorgu endpoint'leri salt okunur olur.
 
 ## Conflict resolution
 ```
@@ -161,11 +167,12 @@ resolve(tetiklenen kurallar):                      # cooldown'dan sonra kalanlar
   uygulanan  = kararı final_decision ile aynı olan tüm tetiklenen kurallar
   bastırılan = diğerleri, nedeniyle
   boost = clip(Σ uygulanan.risk_boost, -0,10, +0,40)
-skor eşiği (RuleEngine.decide), boost'tan önceki skorla:
-  kural kararı yok      ve adjusted_score_unclipped >= score_review_threshold -> review ("score")
-  kazanan allow         ve adjusted_score_unclipped >= score_review_threshold -> review ("score");
-                        allow bastırılır, boost'u geri alınır
-  kural kararı yok, eşik altı -> allow ("default")
+
+skor eşiği (RuleEngine.decide), boost'tan ÖNCEKİ skorla (adjusted_score_unclipped):
+  eşik üstü VE kazanan allow -> allow geçersiz: kurallar allow'lar YOKMUŞ gibi yeniden çözülür
+      (resolve_score_over_allow); kural review'ları ve boost'ları uygulanır, kaynak kural id'si
+      olur; allow kuralları "skor eşiğinden gelen review'u bastıramaz" nedeniyle bastırılır
+  hâlâ block/review kararı yoksa: eşik üstü -> review ("score"), eşik altı -> allow ("default")
 final_score_unclipped = adjusted_score_unclipped + boost      # alarm sıralaması bununla
 final_score           = clip(final_score_unclipped, 0, 1)     # yalnızca çıktı/gösterim
 ```
@@ -173,15 +180,15 @@ Kurallar:
 1. Küçük priority değeri kazanır.
 2. Aynı priority'de yüksek severity kazanır.
 3. Aynı priority ve severity'de block > review > allow.
-4. **allow yalnızca KURAL kaynaklı ve daha DÜŞÜK öncelikli review kararlarını bastırabilir** (K-25 düzeltmesi):
-   - allow ve block (önceliği ne olursa olsun) -> **block**. Neden: "allow, block kararını hiçbir zaman bastıramaz".
+4. **allow yalnızca KURAL kaynaklı ve daha DÜŞÜK öncelikli review kararlarını bastırabilir** (K-25, K-26):
+   - allow ve block (önceliği ne olursa olsun) -> **block**. Kazanan block ise neden: "allow kuralı block kararını hiçbir zaman bastıramaz". Block tetiklendiği halde daha yüksek öncelikli bir review kazanırsa neden: "tetiklenen bir block kuralı allow'u geçersiz kılar; kalan en güçlü kural ... kazandı" (K7-5).
    - allow ve eşit/yüksek öncelikli kural review -> **review**. Neden: "allow kuralı, eşit veya daha yüksek öncelikli bir review varken uygulanmaz".
-   - allow ve daha düşük öncelikli kural review -> **allow** (mevcut davranış korundu). Review kuralı "daha yüksek öncelik" nedeniyle bastırılır.
-   - allow ve skor eşiğinden gelen review -> **review**. Neden: "allow kuralı, skor eşiğinden gelen review kararını bastıramaz".
+   - allow ve daha düşük öncelikli kural review, skor eşik altı -> **allow**. Review kuralı "daha yüksek öncelik" nedeniyle bastırılır.
+   - allow ve skor eşik üstü -> allow **geçersiz**, kurallar allow olmadan yeniden çözülür (K-26). Örnek: A1 (p1, allow) + V5 (p5, review), skor 0,95 >= eşik 0,90 -> karar review, kaynak V5, V5'in +0,08 boost'u uygulanır; A1 bastırılır. Kural review'u yoksa karar skor kaynaklı review'dur ("Block/review kuralı tetiklenmedi; skor ...").
 
 - Bastırılan kuralların boost'u uygulanmaz: iç içe kurallarda (R02 ⊂ R05) aynı kanıtın iki kez sayılmasını önler. Aynı kararı veren bağımsız kurallar (ör. R04 + R06, ikisi de review) toplanır, tavanla sınırlanır.
-- Çözüm yalnızca hangi kuralların tetiklendiğine bağlıdır. Bu yüzden batch'te her farklı tetiklenme deseni için bir kez hesaplanır ve satırlara dağıtılır (590k satır ~3 sn). Skora bağlı kısım (eşik) vektörel uygulanır.
-- Tasarım gereği R10 kart testi (R01) satırlarında hiç tetiklenmez (`not` düğümü). R10'un tetiklendiği satırlar C4 indirimi aldığı için skor eşiğine nadiren ulaşır. Bu nedenle kural-4 düzeltmesi **mevcut veride hiçbir satırın kararını değiştirmedi**: allow (R10) sayısı fit'te 7.348, holdout'ta 3.830 olarak kaldı. Düzeltme, kural setinin veya skorların değiştiği durumlar için bir mantık güvencesidir ve testlerle sabitlenmiştir.
+- Çözüm yalnızca hangi kuralların tetiklendiğine ve skorun eşiği geçip geçmediğine bağlıdır. Bu yüzden batch'te her farklı (tetiklenme deseni, eşik üstü mü) ikilisi için bir kez hesaplanır ve satırlara dağıtılır (590k satır ~3 sn).
+- Tasarım gereği R10 kart testi (R01) satırlarında hiç tetiklenmez (`not` düğümü), R10 en düşük önceliktedir (p5) ve tetiklendiği satırlar C4 indirimi aldığı için skor eşiğine ulaşmaz. Bu yüzden kural-4 düzeltmeleri (K-25, K-26) **mevcut veride hiçbir satırın kararını değiştirmedi**: allow (R10) sayısı fit'te 7.348, holdout'ta 3.830. Düzeltmeler, istekte gelen kural setleri veya config değişiklikleri için mantık güvencesidir ve testlerle sabitlenmiştir.
 
 ### Çakışan kurallı örnek kayıtlar (gerçek veri, `reports/rules/conflict_examples.json`)
 Holdout'ta yalnızca 1 çakışma var (küçük tutar ve yüksek tutar kuralları birbirini dışlar). Bu yüzden örnekler etiketsiz olarak tüm satırlardan seçildi: her farklı "kazanan > bastırılan" birleşimi için en yüksek final skorlu satır alındı, allow'un bastırıldığı birleşimler öne kondu. Çakışma sayıları (`conflicts.csv`): fit'te R04 > R10 (2), R02 > R04 (1), R02 > R05 (1), R01 > R03 (1; cooldown öncesi 5); holdout'ta R02 > R05 (1).
@@ -224,8 +231,9 @@ Kural kararı yoksa `reasons` bir skor satırı içerir (ör. "Karar kuralı tet
 
 ## Dinamik çalışma
 - `RuleRepository(configs/rules.yaml)`: `files.rules` listesindeki tüm dosyaları (YAML ve JSON) yükler. `reload()` kodu değiştirmeden yeni kural setini okur; dosya geçersizse eski set korunur. Yeni kural eklemek = YAML/JSON'a bir blok eklemek.
-- `RuleEngine.evaluate(record, anomaly_score, rules=None, update_state=True)`: `rules` verilirse (JSON metni, `{"rules": [...]}` veya liste) aynı şema ve ad doğrulamasından geçer ve yalnızca o çağrıda kullanılır; yüklü set değişmez. `anomaly_score` = Adım 6 `adjusted_score_unclipped`. Kayıt gösterim için `anomaly_score` (Adım 5) ve `adjusted_score` alanlarını taşıyabilir. Eksik girdi kolonu `KeyError` verir.
-- Container: `Container.rule_repository` ve `Container.rule_engine` (Singleton). Motor kendi `CooldownStore`'unu taşır. Testlerde `container.rule_engine.override(...)` ile değiştirilebilir.
+- `RuleEngine.reload()`: repository'yi yeniden yükler ve öğrenilmiş eşikleri (`learned:` bloğu + dış parametreler) factory'nin verdiği yükleyiciyle yeniden okur; motorun eşikleri eskide kalmaz.
+- `RuleEngine.evaluate(record, anomaly_score, rules=None, update_state=True)`: `rules` verilirse (JSON metni, `{"rules": [...]}` veya liste) aynı şema ve ad doğrulamasından geçer ve yalnızca o çağrıda kullanılır; yüklü set değişmez ve cooldown durumu yazılmaz (yalnızca okunur). `anomaly_score` = Adım 6 `adjusted_score_unclipped`. Kayıt gösterim için `anomaly_score` (Adım 5) ve `adjusted_score` alanlarını taşıyabilir. Eksik girdi kolonu `KeyError` verir.
+- Container: `Container.rule_repository`, `Container.cooldown_store`, `Container.rule_engine` (Singleton). Store container'dan inject edilir. Testlerde `override(...)` ile değiştirilebilir.
 
 ## Çıktılar (`reports/rules/`, örneklem `reports/rules/sample/`, ilk sürüm `reports/rules/v1/`)
 | Dosya | Şema |
@@ -356,6 +364,19 @@ Kurallar bu tablo nedeniyle değiştirilmedi. **Gelecek iş:** kurallar ayrı bi
 1. **R10 / kural 4 (mantık hatası):** İlk sürümde allow, skor eşiğinden gelen review'u ezebiliyordu ve düşük öncelikli bir block'a karşı kazanabiliyordu. Artık allow yalnızca kural kaynaklı, daha düşük öncelikli review'u bastırabilir (Conflict resolution, kural 4). Mevcut veride hiçbir satırın kararı değişmedi.
 2. **R03 cooldown (tetiklenme yoğunlaşması):** Etiketsiz yoğunlaşma metriği, ilk sürümde R03'ün holdout tetiklenmelerinin %99,6'sının tek bir entity'den geldiğini gösterdi: patlamadaki her işlem kuralı yeniden tetikliyordu. Cooldown ile tetiklenme holdout'ta 1.128'den 21'e, fit'te 53'ten 8'e indi. Holdout'ta top-1 payı 0,904 (19/21): patlama artık saatte bir uyarı üretiyor.
 
+## Denetim düzeltmeleri (step-reviewer, `reports/reviews/step6_7_review.md`)
+Hepsi kullanıcı kararıdır. Tam veri yeniden koşuldu: Adım 7'nin tüm rapor dosyaları (bütçe tablosu, kural ve karar metrikleri, kapsama, örnekler) ve Adım 6'nın etiketli çıktıları önceki sürümle aynı. Yukarıdaki tablolar değişmedi.
+- **K7-1 (K-26):** skor eşiği allow'u geçersiz kılınca kurallar allow olmadan yeniden çözülür; kural review'ları ve boost'ları uygulanır, gerekçeler doğru dolar ("Karar kuralı tetiklenmedi" hatası giderildi).
+- **K7-2:** `CooldownStore` container Singleton'ı; motor store'u oluşturmaz, factory üzerinden alır.
+- **K7-3 (K-27):** istekte gelen kural setleri store'u okur, yazmaz; yüklü set TransactionID başına bir kez yazar; pencere dışı kayıtlar silinir. Kalıcı store ve işlem kaydı endpoint'i gelecek iş.
+- **K7-4:** decisions.md K-22 "K-25 ile değişti" olarak işaretlendi; `configs/rules.yaml` yorumları koda uyduruldu.
+- **K7-5:** block tetiklenmiş ama daha yüksek öncelikli review kazanmışsa allow'un bastırılma nedeni artık bunu söylüyor.
+- **K7-6:** `RuleEngine.reload()` öğrenilmiş eşikleri de yeniden okur.
+- **K7-7:** entity kolonları `configs/entity.yaml`'dan okunur.
+- **K7-8:** script'te etiket özeti `src/evaluation/rule_metrics.label_summary` ile; `OnlineReplay.evaluate` dönüş tipi var; replay motorun store'unu değiştirmek yerine ayrı bir motor kurar.
+- **K7-9:** aynı TransactionDT'de "önce" = küçük TransactionID; kodda `lexsort` ile açıkça uygulanır (Cooldown bölümü).
+- **K7-10:** bellek notu (Komutlar).
+
 ## Tasarımdan sapmalar ve uyarlamalar
 1. **risk_boost değerleri ve tavanı** başlangıçta tasarımda yoktu; önerilen değerler kullanıcı tarafından onaylandı (K-23): critical +0,30, high +0,15, medium +0,08, low +0,03, allow 0; toplam [-0,10, +0,40] aralığına kırpılır.
 2. **"Yüksek tutar" tüm kurallarda fit q95** (tasarım R02 için q95 diyordu, diğer kurallarda aynı eşik kullanıldı). Adım 6'daki C2/C8 q90 kullanır.
@@ -367,7 +388,8 @@ Kurallar bu tablo nedeniyle değiştirilmedi. **Gelecek iş:** kurallar ayrı bi
 8. **Şema ekleri:** `contains` operatörü, `cooldown` alanı, boost-karar uyumu kontrolü, mesaj alanlarının yüklemede doğrulanması.
 9. **Çakışma örnekleri tüm satırlardan** seçildi (holdout'ta yalnızca 1 çakışma var).
 10. **`email_ent_known`** Adım 6'nın fonksiyonuyla hesaplanır (`src/rules` -> `src/context` yatay import).
-11. **Cooldown online'da durumlu** (`CooldownStore`, bellek içi), çünkü "son tutulan tetiklenme" durumsuz olarak türetilemez.
+11. **Cooldown online'da durumlu** (`CooldownStore`, bellek içi, container Singleton), çünkü "son tutulan tetiklenme" durumsuz olarak türetilemez. Store işlem başına idempotenttir ve istekte gelen kural setleri onu yalnızca okur (K-27).
+12. **Entity kolonları** (`card1`, `addr1`) hiçbir yerde sabit yazılmaz; `configs/entity.yaml`'dan okunur (`src/context/inputs.py` `RAW_SOURCE_COLUMNS` dahil).
 
 ## Bilinen sınırlar
 - **Kurallar holdout'ta sıralamayı Adım 6'nın üstüne çıkarmıyor** (düzeltilmiş: %1'de +15, %5'te +69 FP). Ana kaynak R04 (geniş kapsam, düşük lift, ProductCD ile karışık). R01 belirgin fayda sağlıyor. Kullanıcı kararıyla R04 değiştirilmedi.
@@ -375,25 +397,27 @@ Kurallar bu tablo nedeniyle değiştirilmedi. **Gelecek iş:** kurallar ayrı bi
 - **R12 holdout'ta hiç tetiklenmiyor:** öğrenilen tatil sezonu (2017-12-19 ... 2017-12-26) fit dönemine düşüyor (Adım 6 C7 ile aynı durum). Fit'te ise lift 0,59.
 - **R10 allow kararları ortalamadan riskli** (precision 0,106). Kart grubu entity'siyle "trusted" düşük risk anlamına gelmiyor. Allow artık skor incelemesini ve block'u ezemiyor, ama kural kaynaklı düşük öncelikli review'ları hâlâ bastırabiliyor.
 - **Entity proxy:** `addr1` boş olan satırlar tek bir seviyede toplanıyor. R01 ve R10'un en yoğun entity'si bu birleşik grup (card1 15885). Bu, cooldown ve yoğunlaşma metriğini de etkiliyor.
-- **Cooldown durumu bellek içi ve tek süreçli;** süreç yeniden başlarsa sıfırlanıyor. Batch'te durum boş başlıyor ve tüm veriyi zaman sırasıyla işliyor.
+- **Cooldown durumu bellek içi ve tek süreçli;** süreç yeniden başlarsa sıfırlanıyor; pencereden eski, sıra dışı gelen işlem silinmiş fire'ları göremez. Batch'te durum boş başlıyor ve tüm veriyi (TransactionDT, TransactionID) sırasıyla işliyor. Gelecek iş: ayrı işlem kaydı endpoint'i ve kalıcı store.
 - **Boost değerleri elle seçildi;** sonuç bunlara duyarlı. Güven aralığı hesaplanmadı ve yalnızca tek bir holdout var.
 - Kural kararı ile bütçe sıralaması ayrı kavramlar: %5 bütçedeki alarmların bir kısmı varsayılan allow kararlı (hiçbir kural tetiklenmemiş ve skor eşiğin altında). Karar eşiği fit q99, bütçe ise holdout'un %5'i.
 - Varsayımlara bağlı kurallar: addr2 = 87 = ABD (R02, R05, R11), D1 = kart yaşı (R04, R12), saat dilimi/düşük hacim penceresi (R02), 3 ondalık = kur çevrimi (R11) (docs/assumptions.md).
 - Online kayıt `inputs:` kataloğundaki kolonları, `email_ent_known`'u ve cooldown için `TransactionDT`, `card1`, `addr1` alanlarını taşımalı; eksik kolon `KeyError` verir.
 - **Gelecek iş:** ayrı bir doğrulama dönemiyle kural kalibrasyonu (boost, eşik, kural seçimi).
 
-## Testler (tests/rules 93 test + tests/evaluation/test_rule_metrics.py 4 test)
+## Testler (tests/rules 103 test + tests/evaluation/test_rule_metrics.py 4 test)
 - Kural bazında: her kural (R01-R12) için tetiklenen ve tetiklenmeyen (sınırda) kayıt; nötr kayıt.
-- Conflict resolution: öncelik, önem, karar sırası; allow ile block (block kazanır, öncelikten bağımsız); allow ile eşit/yüksek öncelikli review (review); allow ile düşük öncelikli kural review (allow); allow ile skor eşiği review (review kalır); boost tavanı; gerçek kural setiyle R02 > R04/R05 ve R04 > R10.
-- Cooldown: pencere sınırı, yalnızca önceki satırlar, durum aktarımı, batch ile online sıralı yeniden oynatma eşitliği, `update_state=False`.
-- Yükleme: YAML + JSON, `reload()`, geçersiz dosyada eski setin korunması, dosyalar arası yinelenen id, 11 geçersiz kural vakası, istekte gelen JSON kural seti.
-- Diğer: tüm operatörler ve NaN davranışı; batch ile tek kayıt eşitliği; yoğunlaşma metriği; etiketli metrik fonksiyonları (`rule_hit_metrics`, `decision_metrics`, `budget_table`, `lift_by_group` içinde ürün karışımının ayrıştırılması); container; `src/rules` ve kural config'lerinde `isFraud` geçmemesi.
+- Conflict resolution: öncelik, önem, karar sırası; allow ile block (block kazanır, öncelikten bağımsız); block tetiklenmiş ama daha yüksek öncelikli review kazanmışsa allow'un nedeni (K7-5); allow ile eşit/yüksek öncelikli review (review); allow ile düşük öncelikli kural review (allow); skor eşik üstünde allow geçersiz ve kurallar allow olmadan yeniden çözülür, hem istekte gelen setle (A1 p1 allow + V5 p5 review) hem yüklü setle (R10 p1'e alınmış + R06) (K7-1); boost tavanı; gerçek kural setiyle R02 > R04/R05 ve R04 > R10.
+- Cooldown: pencere sınırı, yalnızca önceki satırlar, aynı TransactionDT'de TransactionID sırası, durum aktarımı, batch ile online sıralı yeniden oynatma eşitliği, aynı işlemin iki kez değerlendirilmesinde aynı sonuç ve tek yazma, istekte gelen setin store'u okuyup yazmaması, `update_state=False`, pencere dışı kayıtların silinmesi, store'un dışarıdan verilmesi.
+- Yükleme: YAML + JSON, `reload()`, `RuleEngine.reload()` ile öğrenilmiş eşiklerin yeniden okunması, geçersiz dosyada eski setin korunması, dosyalar arası yinelenen id, 11 geçersiz kural vakası, istekte gelen JSON kural seti.
+- Diğer: tüm operatörler ve NaN davranışı; batch ile tek kayıt eşitliği; yoğunlaşma metriği; etiketli metrik fonksiyonları; container (store Singleton'ının motora bağlı olması ve override); `src/rules` ve kural config'lerinde `isFraud` geçmemesi.
 
 ## Komutlar
 - Örneklem: `SAMPLE_N=50000 python scripts/run_rules.py` (~5 sn; önce Adım 6'nın örneklem koşusu gerekir).
 - Tam veri: `python scripts/run_rules.py` (~29 sn; önce `python scripts/run_context.py`).
 - Pipeline içinden: `make pipeline` veya `python scripts/run_pipeline.py --only rules`.
 - `--no-eval` etiketli değerlendirmeyi atlar.
+
+Bellek: girdiler Adım 1-3'te dtype downcast edilmiş parquet dosyalarıdır (float32, küçük tamsayı tipleri, kategoriler); script yalnızca `inputs:` kataloğundaki kolonları okur (features.parquet'ten 19 kolon, merged.parquet'ten 8 kolon), V kolonlarını hiç yüklemez. Tam veri koşusunda tepe bellek (macOS `/usr/bin/time -l`, maximum resident set size) ~2,1 GB, süre ~29 sn (değerlendirme, ablation ve 250 satırlık parity kontrolü dahil). Ölçüm tek makinede tek koşudur. `rule_hits.parquet` liste kolonları içerir ama satırların çoğunda listeler boştur.
 
 Örneklem (SAMPLE_N=50000; 10.000 holdout, 228 pozitif) yalnızca duman testidir: %1'de FP 88 / 89 / 88, %5'te 468 / 456 / 468 (Adım 5 / 6 / 7). Örneklemde cooldown'a takılan satır yok. Örneklem ~2 hafta olduğu için R10 hiç tetiklenmez (yaş >= 30 gün şartı sağlanmaz).
 

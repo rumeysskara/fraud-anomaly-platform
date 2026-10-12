@@ -7,6 +7,7 @@ from dependency_injector import containers, providers
 from src.context.factory import load_engine
 from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
 from src.features.pipeline import FeaturePipeline
+from src.rules.cooldown import CooldownStore
 from src.rules.factory import load_rule_engine
 from src.rules.repository import RuleRepository
 from src.scoring.service import ScoringService
@@ -33,7 +34,11 @@ class Container(containers.DeclarativeContainer):
     # Step 7: rule repository (configs/rules.yaml + rules_extra.json, reload()) and rule engine
     # (thresholds learned on the fit set, stored in rules.yaml `learned:`; never fitted here).
     rule_repository = providers.Singleton(RuleRepository, CONFIG_DIR / "rules.yaml")
-    rule_engine = providers.Singleton(load_rule_engine, rule_repository)
+    # Step 7 review (K7-2): online cooldown state, injected into the engine (override in tests).
+    cooldown_store = providers.Singleton(CooldownStore)
+    rule_engine = providers.Singleton(
+        load_rule_engine, rule_repository, cooldown_store=cooldown_store
+    )
 
 
 def create_container() -> Container:

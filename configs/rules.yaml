@@ -22,7 +22,10 @@
 #
 # Conflict resolution (src/rules/resolver.py):
 #   1. smaller priority wins  2. same priority: higher severity  3. then block > review > allow
-#   4. an allow rule wins only when no block/review rule with the same or higher priority fired
+#   4. allow only overrides REVIEW decisions of rules with a LOWER priority: any fired block
+#      beats allow regardless of priority, a review with the same or higher priority beats allow,
+#      and allow is void when the score reaches the review threshold (the rules are then
+#      resolved again without the allow rule) (K-25, K-26)
 #   Rules whose decision differs from the final decision are suppressed (with the reason) and their
 #   boost is not applied. final_score_unclipped = adjusted_score_unclipped + clip(sum(boosts));
 #   alarms are ranked by the unclipped value, final_score = clip(.., 0, 1) is for output only.
@@ -39,9 +42,10 @@ boost:
 score_clip: {min: 0.0, max: 1.0}
 
 decision:
-  # When no rule decides: review if final_score_unclipped >= the param below, else default.
-  # The param is a FIT quantile of adjusted_score_unclipped (label-free); set enabled: false to
-  # turn the score-based review off.
+  # The score BEFORE any rule boost (adjusted_score_unclipped) is compared with the param below.
+  # When no block/review rule decides (or only an allow rule fired): review if the score is >=
+  # the param, else default. The param is a FIT quantile of adjusted_score_unclipped
+  # (label-free); set enabled: false to turn the score-based review off.
   score_review:
     enabled: true
     threshold: {param: score_review_threshold}

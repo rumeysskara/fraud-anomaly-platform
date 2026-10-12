@@ -158,3 +158,89 @@ def test_engine_allow_vs_card_testing_block(engine, neutral):
     result = engine.evaluate(record, 0.3)
     # R10 itself excludes card testing; R01 decides block either way
     assert result.final_decision == "block" and "R10" not in result.applied_rules
+
+
+def test_block_voids_allow_while_higher_review_wins():
+    """K7-5: V1 p1 review + B3 p3 block + A2 p2 allow -> review; the reason names the block."""
+    res = resolve(
+        [
+            rule("V1", 1, "low", "review"),
+            rule("B3", 3, "low", "block"),
+            rule("A2", 2, "low", "allow"),
+        ],
+        -0.1,
+        0.4,
+    )
+    assert res.winner == "V1"
+    reasons = dict(res.suppressed)
+    assert "eşit veya daha yüksek öncelikli" in reasons["A2"]
+    res = resolve(
+        [
+            rule("A1", 1, "low", "allow"),
+            rule("V2", 2, "low", "review"),
+            rule("B4", 4, "low", "block"),
+        ],
+        -0.1,
+        0.4,
+    )
+    assert res.winner == "V2"
+    assert "block kuralı allow'u geçersiz kılar" in dict(res.suppressed)["A1"]
+
+
+ALLOW_FIRST = [
+    {
+        "id": "A1",
+        "name": "trusted",
+        "priority": 1,
+        "severity": "low",
+        "condition": {"feature": "ent_txn_count", "op": ">=", "value": 1},
+        "action": {"risk_boost": 0.0, "decision": "allow", "flag": "a"},
+        "message": "allow",
+    },
+    {
+        "id": "V5",
+        "name": "big",
+        "priority": 5,
+        "severity": "medium",
+        "condition": {"feature": "TransactionAmt", "op": ">", "value": 50},
+        "action": {"risk_boost": 0.08, "decision": "review", "flag": "v"},
+        "message": "Tutar {TransactionAmt:.0f}",
+    },
+]
+
+
+def test_score_over_threshold_resolves_again_without_allow_request_time(engine, neutral):
+    """K7-1 (a): A1 p1 allow + V5 p5 review, score over the threshold -> V5 decides."""
+    result = engine.evaluate(neutral, 0.95, rules=ALLOW_FIRST)
+    assert result.final_decision == "review" and result.decision_source == "V5"
+    assert result.applied_rules == ["V5"] and result.boost_total == pytest.approx(0.08)
+    assert result.final_score_unclipped == pytest.approx(1.03)
+    assert [s["id"] for s in result.suppressed_rules] == ["A1"]
+    assert "skor eşiğinden" in result.suppressed_rules[0]["reason"]
+    assert result.reasons[0] == "Tutar 100"
+    assert not any("Karar kuralı tetiklenmedi" in r for r in result.reasons)
+    # below the threshold the allow rule keeps winning
+    low = engine.evaluate(neutral, 0.5, rules=ALLOW_FIRST)
+    assert low.final_decision == "allow" and low.suppressed_rules[0]["id"] == "V5"
+
+
+def test_score_over_threshold_resolves_again_without_allow_loaded_rules(repo, neutral):
+    """K7-1 (a) with a loaded rule set: R10 raised to priority 1 beats R06 (p3) below the
+    threshold; above it R06 decides and keeps its boost."""
+    from src.rules.cooldown import CooldownStore
+    from src.rules.engine import RuleEngine
+    from tests.rules.conftest import PARAMS
+
+    rules = [r.model_copy(update={"priority": 1}) if r.id == "R10" else r for r in repo.rules]
+    repo._rules = rules  # synthetic loaded set
+    engine = RuleEngine(repo, PARAMS, CooldownStore())
+    record = {
+        **trusted_record(neutral),
+        "amt_ratio_to_ent_avg": 6.0,
+    }
+    low = engine.evaluate(record, 0.5)
+    assert low.final_decision == "allow" and low.decision_source == "R10"
+    high = engine.evaluate(record, 0.95)
+    assert high.final_decision == "review" and high.decision_source == "R06"
+    assert high.boost_total == pytest.approx(0.08)
+    assert {s["id"] for s in high.suppressed_rules} == {"R10"}

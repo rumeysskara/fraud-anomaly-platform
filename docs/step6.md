@@ -44,7 +44,7 @@ Koşul dili: `all:` altında `{feature, op, value}` cümleleri (op: `== != >= <=
 
 Türetilmiş kolonlar (`derive.py`, batch ve tek kayıtta aynı kod):
 - `abs_amt_zscore_ent` = |amt_zscore_ent|
-- `email_ent_known` = entity bu P_emaildomain'i DAHA ÖNCEKİ bir işlemde kullanmış mı (TransactionDT sırası, satırın kendisi ve sonrası sayılmaz; boş e-posta hiç "bilinen" olmaz). features.parquet'te yoktu, `inputs.py` üretir; online yolda entity store'un e-posta kümesinden gelir.
+- `email_ent_known` = entity bu P_emaildomain'i DAHA ÖNCEKİ bir işlemde kullanmış mı ((TransactionDT, TransactionID) sırası: aynı saniyedeki satırlarda küçük TransactionID önce gelir; satırın kendisi ve sonrası sayılmaz; boş e-posta hiç "bilinen" olmaz). features.parquet'te yoktu, `inputs.py` üretir; online yolda entity store'un e-posta kümesinden gelir.
 - `known_device_or_email` = `device_ent_match >= 1` veya `email_ent_known == 1` (ikisi de yalnızca geçmiş)
 - `ent_daily_avg` = `ent_txn_count / max(ent_age_days, 1)` (entity'nin geçmiş günlük ortalaması)
 - `burst_ratio_24h` = `ent_cnt_24h / ent_daily_avg`
@@ -53,25 +53,25 @@ Türetilmiş kolonlar (`derive.py`, batch ve tek kayıtta aynı kod):
 Fit'ten öğrenilenler (`artifacts/context/context_params.json`, örneklemde `artifacts/context/sample/`; tam veri, n_fit = 472.432): `amount_high` = TransactionAmt q90 = **277,0**; `dominant_addr2` = **87** (Adım 3'teki değerle aynı, script kontrol eder); revize C4 için `trusted_min_history` = `ent_txn_count` fit q90 = **809**. Örneklemde 250,0 ve 51.
 
 ## Kurallar
-Tetiklenme payı: kuralın skoru değiştirdiği satırların payı (`reports/context/rule_coverage.csv`, etiketsiz).
+Tetiklenme payı: kuralın skoru değiştirdiği satırların payı (etiketsiz). İlk tasarım payları `reports/context/initial_design/rule_coverage.csv`, revize tasarım payları `reports/context/rule_coverage.csv` dosyasından alındı. Revize tasarımda C6a, C6b, C9a ve C9b dışlayıcı gruptadır; bu yüzden C9a'nın payı düşer.
 
-| ID | Koşul | Çarpan | Gerekçe (kısa) | Fit payı | Holdout payı |
+| ID | Koşul | Çarpan | Gerekçe (kısa) | İlk tasarım fit / holdout | Revize fit / holdout |
 |---|---|---|---|---|---|
-| C1 | `local_hour_est` 09-18, `is_weekend = 0`, `ent_txn_count >= 1` | x0,90 | Yerel iş saatinde, geçmişi olan entity: en az şaşırtıcı durum | %39,0 | %41,4 |
-| C2 | `is_low_volume_window = 1`, tutar >= fit q90 | x1,15 | Herkes uyurken büyük tutar: hesap ele geçirme kalıbı | %0,34 | %0,48 |
-| C3 | `is_weekend = 1`, `ent_txn_count >= 5` | x0,95 | Yerleşik entity'de hafta sonu alışverişi olağandır (referans tarih 2017-12-01 varsayımı) | %23,8 | %25,5 |
-| C4 (ilk) | `ent_txn_count >= 20`, `abs_amt_zscore_ent <= 2`, `known_device_or_email = 1` | x0,75 | Uzun geçmiş + kendi normal tutarı + tanıdık cihaz/e-posta: geri dönen müşteri | %47,8 | %61,1 |
-| C4 (revize, güncel) | `ent_txn_count >=` fit q90 (809), `ent_age_days >= 30`, `abs_amt_zscore_ent <= 2`, `known_device = 1` VE `known_email = 1` | x0,75 | Aynı gerekçe; "güvenilir" küçük bir azınlık olmalı (Düzeltme bölümü) | %2,0 | %4,0 |
-| C5 | `ent_txn_count >= 5`, `ent_daily_avg >= 1`, `burst_ratio_24h <= 3` | temporal ağırlığı x0,5 (yalnızca skoru düşürürse) | Sık işlem yapan entity için yüksek velocity normal ritimdir (Adım 5: temporal üst %1'in %96'sı tek entity burst'ü) | %31,6 (ort. x0,88) | %28,4 (ort. x0,87) |
-| C6a | `addr2` dolu ve != fit baskın değeri (87) | x1,20 | Sınır ötesi işlem (addr2 = 87 = ABD varsayımı) | %0,83 | %0,36 |
-| C6b | `addr2` boş ve `amt_has_3dec = 1` | x1,10 | Ülkesi bilinmeyen + kur çevrimi görünümlü tutar | %10,2 | %9,1 |
-| C7 | `holiday_season = 1`, `dominant_layer = temporal` | x0,90 | Tatil tepesinde hacim/velocity alarmları kısmen mevsimsel gürültüdür | %0,31 | %0 |
-| C8 | `card_age_days = 0` (D1 = 0), tutar >= fit q90 | x1,15 | Kartın ilk gününde büyük alışveriş: çalıntı kart / bust-out kalıbı | %5,7 | %5,3 |
-| C9a | `ProductCD = C` | x1,10 | Azınlık, kart-yok (CNP), çoğunlukla ülkesiz dijital kanal | %11,9 | %10,3 |
-| C9b | `ProductCD = W` | x0,95 | Ana akım ürün; modellerin "normal"i büyük ölçüde onunla kalibre | %73,2 | %79,3 |
+| C1 | `local_hour_est` 09-18, `is_weekend = 0`, `ent_txn_count >= 1` | x0,90 | Yerel iş saatinde, geçmişi olan entity: en az şaşırtıcı durum | %39,0 / %41,4 | %39,0 / %41,4 |
+| C2 | `is_low_volume_window = 1`, tutar >= fit q90 | x1,15 | Herkes uyurken büyük tutar: hesap ele geçirme kalıbı | %0,34 / %0,48 | %0,34 / %0,48 |
+| C3 | `is_weekend = 1`, `ent_txn_count >= 5` | x0,95 | Yerleşik entity'de hafta sonu alışverişi olağandır (referans tarih 2017-12-01 varsayımı) | %23,8 / %25,5 | %23,8 / %25,5 |
+| C4 (ilk) | `ent_txn_count >= 20`, `abs_amt_zscore_ent <= 2`, `known_device_or_email = 1` | x0,75 | Uzun geçmiş + kendi normal tutarı + tanıdık cihaz/e-posta: geri dönen müşteri | %47,8 / %61,1 | - (yerini revize aldı) |
+| C4 (revize, güncel) | `ent_txn_count >=` fit q90 (809), `ent_age_days >= 30`, `abs_amt_zscore_ent <= 2`, `known_device = 1` VE `known_email = 1` | x0,75 | Aynı gerekçe; "güvenilir" küçük bir azınlık olmalı (Düzeltme bölümü) | - | %2,0 / %4,0 |
+| C5 | `ent_txn_count >= 5`, `ent_daily_avg >= 1`, `burst_ratio_24h <= 3` | temporal ağırlığı x0,5 (yalnızca skoru düşürürse) | Sık işlem yapan entity için yüksek velocity normal ritimdir (Adım 5: temporal üst %1'in %96'sı tek entity burst'ü) | %31,6 / %28,4 (ort. x0,88 / x0,87) | aynı |
+| C6a | `addr2` dolu ve != fit baskın değeri (87) | x1,20 | Sınır ötesi işlem (addr2 = 87 = ABD varsayımı) | %0,83 / %0,36 | %0,83 / %0,36 |
+| C6b | `addr2` boş ve `amt_has_3dec = 1` | x1,10 | Ülkesi bilinmeyen + kur çevrimi görünümlü tutar | %10,2 / %9,1 | %10,2 / %9,1 |
+| C7 | `holiday_season = 1`, `dominant_layer = temporal` | x0,90 | Tatil tepesinde hacim/velocity alarmları kısmen mevsimsel gürültüdür | %0,31 / %0 | %0,31 / %0 |
+| C8 | `card_age_days = 0` (D1 = 0), tutar >= fit q90 | x1,15 | Kartın ilk gününde büyük alışveriş: çalıntı kart / bust-out kalıbı | %5,7 / %5,3 | %5,7 / %5,3 |
+| C9a | `ProductCD = C` | x1,10 | Azınlık, kart-yok (CNP), çoğunlukla ülkesiz dijital kanal | %11,9 / %10,3 | %1,1 / %0,9 (C6b'nin tetiklenmediği C satırları) |
+| C9b | `ProductCD = W` | x0,95 | Ana akım ürün; modellerin "normal"i büyük ölçüde onunla kalibre | %73,2 / %79,3 | %73,2 / %79,3 |
+| G1 | `small_amt_streak_1h >= 2` (koruma) | toplam >= 1,0 | Card testing indirimlerle gizlenemez | koşul %1,8 / %1,4 | aynı |
 
-C9 notu: yön fit EDA etiket tablosuyla uyumlu (holdout değil). Değer o tablodan seçilmedi; tablo yalnızca makullük kontrolüdür. Revize tasarımda C6a, C6b, C9a, C9b `exclusive_group: geo_product` grubundadır (Düzeltme bölümü). Yukarıdaki pay sütunları ilk tasarımın koşusudur.
-| G1 | `small_amt_streak_1h >= 2` (koruma) | toplam >= 1,0 | Card testing indirimlerle gizlenemez | koşul %1,8 | koşul %1,4 |
+C9 notu: yön fit EDA etiket tablosuyla uyumlu (holdout değil). Değer o tablodan seçilmedi; tablo yalnızca makullük kontrolüdür.
 
 Tam gerekçe metinleri config'teki `rationale` alanındadır ve her satırın `applied_adjustments` listesine yazılır.
 
@@ -259,7 +259,11 @@ C4'ün her koşulunun tek tek gerekli olması (yalnızca e-posta / yalnızca cih
 Her kural için tetiklenen/tetiklenmeyen durum (C1-C4, C6a, C6b, C8, C9a, C9b parametreli; C5 burst ve düşük temporal; C7 baskın katman), nötr kayıt değişmez, koruma skoru ham skorda tutar ama artışı engellemez, üst/alt sınır ve [0,1] kırpma, **batch = tek kayıt** (300 rastgele satır, skor ve uygulanan kural listesi eşit; her kural en az bir kez tetiklenir), çıktı şeması ve açıklama alanları, eksik girdi kolonu hatası, config doğrulama (yinelenen id, bilinmeyen kolon), en az 6 gerekçeli kural, NaN karşılaştırması, parametre fit + JSON gidiş-dönüş, `email_ent_known`'un yalnızca önceki satırları kullanması, eşitlik kırıcı, ablation varyant sayısı, `src/context`'te `isFraud` geçmemesi, container provider'ı.
 
 ## Komutlar
-Örneklem: `SAMPLE_N=50000 python scripts/run_context.py` (~2 sn). Tam veri: `python scripts/run_context.py` (~16 sn; önce `make score`). `--no-eval` değerlendirmeyi atlar.
+Örneklem: `SAMPLE_N=50000 python scripts/run_context.py` (~2 sn). Tam veri: `python scripts/run_context.py` (~16-18 sn; önce `make score`). `--no-eval` değerlendirmeyi atlar.
+
+Bellek: girdiler Adım 1-3'te dtype downcast edilmiş parquet dosyalarıdır (float32, küçük tamsayı tipleri, kategoriler); script yalnızca gereken kolonları okur (`merged.parquet`'ten `RAW_SOURCE_COLUMNS`). Tam veri koşusunda tepe bellek (macOS `/usr/bin/time -l`, maximum resident set size) ~1,9 GB, süre ~18 sn (değerlendirme ve ablation dahil). Ölçüm tek makinede tek koşudur.
+
+Etiketli hesap `src/evaluation/rule_metrics.py` (`budget_table`, `label_summary`) ve `src/evaluation/metrics.py` (`evaluate`) içindedir; `scripts/run_context.py` yalnızca etiketsiz skorları verir (Adım 7 denetimi K6-2). Taşımadan sonra tam veri yeniden koşuldu: `fp_impact.csv`, `fp_comparison.csv`, `ablation.csv`, `holdout_base.csv` önceki sürümle bayt düzeyinde aynı.
 
 ## Bir sonraki adımın girdisi (Adım 7)
 Rule engine `reports/scores/adjusted_score.parquet` içindeki skoru okur: gösterim/çıktı için `adjusted_score` ([0,1]), sıralama ve alarm bütçesi için `adjusted_score_unclipped`; açıklama için `applied_adjustments`, denetim için `raw_score` ve `raw_anomaly_score`. Eşitlik kalırsa `raw_anomaly_score` ikincil anahtardır. Online yol: `Container.context_adjuster.adjust_one(record, anomaly_score_norm) -> AdjustedResult`. Kural engine'i card testing gibi kritik sinyalleri ayrıca değerlendirmelidir; context katmanı yalnızca onların indirimle bastırılmasını engeller.

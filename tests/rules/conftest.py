@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from src.core.config import CONFIG_DIR
+from src.rules.cooldown import CooldownStore
 from src.rules.engine import RuleEngine
 from src.rules.repository import RuleRepository
 
@@ -26,7 +27,7 @@ def repo() -> RuleRepository:
 
 @pytest.fixture
 def engine(repo: RuleRepository) -> RuleEngine:
-    return RuleEngine(repo, PARAMS)
+    return RuleEngine(repo, PARAMS, CooldownStore())
 
 
 @pytest.fixture
@@ -58,6 +59,7 @@ def neutral() -> dict[str, Any]:
         "P_emaildomain": "gmail.com",
         "R_emaildomain": None,
         "email_ent_known": 0,
+        "TransactionID": 1,
         "TransactionDT": 86400,
         "card1": 1000,
         "addr1": 300.0,

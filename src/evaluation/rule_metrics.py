@@ -116,3 +116,8 @@ def lift_by_group(y: pd.Series, masks: pd.DataFrame, group: pd.Series) -> pd.Dat
                 }
             )
     return pd.DataFrame(rows)
+
+
+def label_summary(y: pd.Series) -> dict[str, float]:
+    """Size, positives and base rate of the evaluated rows (for logs and holdout_base.csv)."""
+    return {"n": len(y), "positives": int(y.sum()), "base_rate": float(y.mean())}

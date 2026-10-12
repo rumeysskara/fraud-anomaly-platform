@@ -45,6 +45,7 @@ from src.rules.engine import (  # noqa: E402
     FINAL_UNCLIPPED,
     HIT_PREFIX,
     RuleEngine,
+    RuleEngineResult,
 )
 from src.rules.params import (  # noqa: E402
     external_params,
@@ -117,16 +118,15 @@ def learn_params(
 
 class OnlineReplay:
     """Single-record re-evaluation of batch rows with the cooldown state the online path would
-    have at that moment (last kept fire of the entity strictly before the row)."""
+    have at that moment (the entity's last kept fire strictly before (time, TransactionID))."""
 
     def __init__(self, engine: RuleEngine, inputs: pd.DataFrame, result: pd.DataFrame) -> None:
         s = engine.settings
         self.engine, self.inputs, self.result = engine, inputs, result
+        self.id_column = s.id_column
         times = inputs[s.time_column].to_numpy("float64")
-        pos = np.empty(len(times), dtype=np.int64)
-        pos[np.argsort(times, kind="stable")] = np.arange(len(times))  # apply_cooldown order
         keys = cooldown_keys(inputs, s.entity_columns)
-        self.state = pd.DataFrame({"time": times, "pos": pos, "key": keys}, index=inputs.index)
+        self.state = pd.DataFrame({"time": times, "key": keys}, index=inputs.index)
         self.fires = {
             r.id: self.state[result[f"{HIT_PREFIX}{r.id}"].to_numpy() == 1]
             for r in engine.active_rules()
@@ -134,22 +134,27 @@ class OnlineReplay:
         }
 
     def store_for(self, tid: int) -> CooldownStore:
-        """Cooldown state just before row tid."""
+        """Online cooldown state just before row tid (seeded from the batch fires)."""
         store = CooldownStore()
         me = self.state.loc[tid]
         for rid, fires in self.fires.items():
-            prior = fires[(fires["key"] == me["key"]) & (fires["pos"] < me["pos"])]
-            if not prior.empty:
-                store.set(rid, me["key"], prior.loc[prior["pos"].idxmax(), "time"])
+            same = fires[fires["key"] == me["key"]]
+            earlier = same[
+                (same["time"] < me["time"]) | ((same["time"] == me["time"]) & (same.index < tid))
+            ]
+            if not earlier.empty:
+                last = earlier.index[-1]
+                store.add_fire(rid, me["key"], earlier.at[last, "time"], int(last))
         return store
 
-    def evaluate(self, tid: int):  # noqa: ANN201 - RuleEngineResult
-        """Online result for row tid."""
+    def evaluate(self, tid: int) -> RuleEngineResult:
+        """Online result for row tid (a separate engine with the seeded store, read-only)."""
         record = self.inputs.loc[tid].to_dict()
+        record[self.id_column] = int(tid)
         record[ANOMALY] = float(self.result.at[tid, ANOMALY])
         record[ADJUSTED] = float(self.result.at[tid, ADJUSTED])
-        self.engine.cooldown_store = self.store_for(tid)
-        return self.engine.evaluate(
+        engine = RuleEngine(self.engine.repository, self.engine.params, self.store_for(tid))
+        return engine.evaluate(
             record, float(self.result.at[tid, ADJUSTED_UNCLIPPED]), update_state=False
         )
 
@@ -180,6 +185,7 @@ def evaluate(
     from src.evaluation.rule_metrics import (
         budget_table,
         decision_metrics,
+        label_summary,
         lift_by_group,
         rule_hit_metrics,
     )
@@ -195,7 +201,8 @@ def evaluate(
     hold = parts["holdout"]
     # stable top-k: equal scores are ranked by the unnormalized Step 5 score (as in Step 6)
     y_hold = y_all.loc[tie_break_order(result.loc[hold, RAW_TIEBREAK])]
-    log.info("holdout rows %s, positives %s", len(y_hold), int(y_hold.sum()))
+    summary = label_summary(y_hold)
+    log.info("holdout rows %s, positives %s", summary["n"], summary["positives"])
 
     rule_hit_metrics(y_hold, hits, applied).to_csv(out / "rule_metrics.csv", index=False)
     decision_metrics(y_hold, result["final_decision"]).to_csv(
@@ -221,9 +228,7 @@ def evaluate(
         variants["all rules" if rule is None else f"without {rule.id}"] = decided[FINAL_UNCLIPPED]
     abl = budget_table(y_hold, variants, budgets)
     abl.to_csv(out / "rule_ablation.csv", index=False)
-    pd.DataFrame(
-        [{"n": len(y_hold), "positives": int(y_hold.sum()), "base_rate": float(y_hold.mean())}]
-    ).to_csv(out / "holdout_base.csv", index=False)
+    pd.DataFrame([summary]).to_csv(out / "holdout_base.csv", index=False)
 
     # EDA consistency check: the same metrics on FIT rows next to holdout (not used for design)
     side = []
@@ -264,7 +269,8 @@ def main() -> int:
     fit_frame = inputs.loc[parts["fit"]].join(scores.loc[parts["fit"]])
     params = learn_params(repo, fit_frame, sample, out)
     del fit_frame
-    engine = RuleEngine(repo, params)
+    # batch runs never use the online store; an empty one satisfies the constructor
+    engine = RuleEngine(repo, params, CooldownStore())
     rules = engine.active_rules()
     log.info("active rules: %s", [r.id for r in rules])
 

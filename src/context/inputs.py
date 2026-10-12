@@ -15,17 +15,24 @@ from src.core.config import load_yaml
 from src.features.utils import NA_KEY, entity_keys, value_keys
 
 EMAIL_SOURCE = "P_emaildomain"
-RAW_SOURCE_COLUMNS = ["TransactionDT", *RAW_COLUMNS, "card1", "addr1", EMAIL_SOURCE]
+# entity key columns come from configs/entity.yaml (K-05), never hardcoded
+RAW_SOURCE_COLUMNS = [
+    "TransactionDT",
+    *RAW_COLUMNS,
+    *load_yaml("entity.yaml")["entity"]["columns"],
+    EMAIL_SOURCE,
+]
 
 
 def email_known_batch(raw: pd.DataFrame, entity_columns: list[str] | None = None) -> pd.Series:
     """1 when the entity used this P_emaildomain in an EARLIER transaction, else 0.
 
-    Rows are processed in TransactionDT order (stable); the current and later rows are never
-    counted. A missing e-mail is never "known".
+    Rows are processed in (TransactionDT, TransactionID) order (raw is indexed by TransactionID),
+    so of two rows with the same TransactionDT the smaller id is "earlier". The current and
+    later rows are never counted. A missing e-mail is never "known".
     """
     cols = entity_columns or load_yaml("entity.yaml")["entity"]["columns"]
-    order = np.argsort(raw["TransactionDT"].to_numpy("int64"), kind="stable")
+    order = np.lexsort((raw.index.to_numpy(), raw["TransactionDT"].to_numpy("int64")))
     sorted_raw = raw.iloc[order]
     email = value_keys(sorted_raw[EMAIL_SOURCE])
     key = entity_keys(sorted_raw, cols) + "\x1f" + email

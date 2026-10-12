@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import math
 import sys
 import time
 from pathlib import Path
@@ -78,49 +77,42 @@ def evaluate_holdout(
     engine: ContextAdjustEngine,
     out: Path,
 ) -> None:
-    """Before/after metrics and the ablation table on holdout; the only place y is read."""
+    """Before/after metrics and the ablation table on holdout. y comes from the loader and is
+    used only inside src.evaluation functions (budget_table, label_summary, evaluate)."""
     from src.data.loader import load_data
     from src.evaluation.metrics import evaluate
+    from src.evaluation.rule_metrics import budget_table, label_summary
 
     budgets = load_settings()["evaluation"]["alarm_budgets"]
     _, y = load_data()
     # rows ordered by the unnormalized Step 5 score: equal adjusted scores (1.0 saturation) are
     # then ranked by it in the stable top-k of src/evaluation (see report.tie_break_order)
     y_hold = y.loc[tie_break_order(result.loc[holdout, RAW_COL])]
-    log.info("holdout rows %s, positives %s", len(y_hold), int(y_hold.sum()))
+    summary = label_summary(y_hold)
+    log.info("holdout rows %s, positives %s", summary["n"], summary["positives"])
 
     def ev(score: pd.Series) -> dict[str, float]:
         return evaluate(y_hold, score.loc[y_hold.index], budgets)
 
-    rows = []
     # ranking uses the UNCLIPPED adjusted score; clipping is for output/display only
-    for name, col in (("before", "raw_score"), ("after", UNCLIPPED)):
-        m = ev(result[col])
-        for b in budgets:
-            alarms = math.ceil(b * len(y_hold))
-            fp = int(m[f"fp@{b}"])
-            rows.append(
-                {
-                    "budget": b,
-                    "score": name,
-                    "alarms": alarms,
-                    "tp": alarms - fp,
-                    "fp": fp,
-                    "precision": m[f"precision@{b}"],
-                    "recall": m[f"recall@{b}"],
-                    "fp_share_of_alarms": fp / alarms,
-                    "pr_auc": m["pr_auc"],
-                    "roc_auc": m["roc_auc"],
-                    "rows_clipped_score_eq_1": int(
-                        (
-                            result.loc[holdout, "raw_score" if name == "before" else ADJUSTED_SCORE]
-                            >= 1.0
-                        ).sum()
-                    ),
-                    "ties_at_cut": ties_at_cut(result.loc[holdout, col], b),
-                }
-            )
-    impact = pd.DataFrame(rows)
+    impact = budget_table(
+        y_hold, {"before": result["raw_score"], "after": result[UNCLIPPED]}, budgets
+    )
+    impact["fp_share_of_alarms"] = impact["fp"] / impact["alarms"]
+    clipped = {
+        "before": result.loc[holdout, "raw_score"],
+        "after": result.loc[holdout, ADJUSTED_SCORE],
+    }
+    ranked = {"before": result.loc[holdout, "raw_score"], "after": result.loc[holdout, UNCLIPPED]}
+    impact["rows_clipped_score_eq_1"] = [int((clipped[n] >= 1.0).sum()) for n in impact["score"]]
+    impact["ties_at_cut"] = [
+        ties_at_cut(ranked[n], b) for n, b in zip(impact["score"], impact["budget"], strict=True)
+    ]
+    cols = ["budget", "score", "alarms", "tp", "fp", "precision", "recall", "fp_share_of_alarms"]
+    cols += ["pr_auc", "roc_auc", "rows_clipped_score_eq_1", "ties_at_cut"]
+    order = {"before": 0, "after": 1}
+    impact = impact.assign(_order=impact["score"].map(order))
+    impact = impact.sort_values(["_order", "budget"], kind="stable")[cols].reset_index(drop=True)
     impact.to_parquet(out / "fp_impact.parquet", index=False)
     impact.to_csv(out / "fp_impact.csv", index=False)
     comparison_table(impact, out).to_csv(out / "fp_comparison.csv", index=False)
@@ -129,7 +121,7 @@ def evaluate_holdout(
     raw_hold = result.loc[holdout, "raw_score"]
     table = run_ablation(engine, hold_inputs, raw_hold, ev)
     table.to_csv(out / "ablation.csv", index=False)
-    pd.DataFrame([{"n": len(y_hold), "positives": int(y_hold.sum())}]).to_csv(
+    pd.DataFrame([{"n": summary["n"], "positives": summary["positives"]}]).to_csv(
         out / "holdout_base.csv", index=False
     )
 

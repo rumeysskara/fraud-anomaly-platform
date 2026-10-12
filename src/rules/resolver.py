@@ -15,7 +15,7 @@ the others are suppressed and the reason is recorded.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from src.rules.schema import DECISION_RANK, SEVERITY_RANK, Rule
 
@@ -56,13 +56,20 @@ def _pick_winner(ordered: list[Rule]) -> Rule:
 
 
 def _reason(rule: Rule, winner: Rule, has_block: bool) -> str:
+    # allow loses either to the block decision itself, to a block that voids it while a
+    # higher-priority review wins, or to a review with the same or higher priority
     """Turkish explanation of why `rule` lost against `winner`."""
     head = (
         f"{winner.id} kazandı (öncelik {winner.priority}, {winner.severity}, "
         f"{winner.action.decision})"
     )
-    if rule.action.decision == "allow" and has_block:
-        why = "allow kuralı block kararını hiçbir zaman bastıramaz (tetiklenen block var)"
+    if rule.action.decision == "allow" and winner.action.decision == "block":
+        why = "allow kuralı block kararını hiçbir zaman bastıramaz"
+    elif rule.action.decision == "allow" and has_block and rule.priority < winner.priority:
+        why = (
+            "tetiklenen bir block kuralı allow'u geçersiz kılar; kalan en güçlü kural "
+            f"{winner.id} kazandı"
+        )
     elif rule.action.decision == "allow":
         why = "allow kuralı, eşit veya daha yüksek öncelikli bir review varken uygulanmaz"
     elif rule.priority > winner.priority:
@@ -98,4 +105,22 @@ def resolve(triggered: list[Rule], boost_min: float, boost_max: float) -> Resolu
         boost_raw=boost_raw,
         boost=min(max(boost_raw, boost_min), boost_max),
         triggered=tuple(r.id for r in ordered),
+    )
+
+
+def resolve_score_over_allow(
+    triggered: list[Rule], boost_min: float, boost_max: float
+) -> Resolution:
+    """Resolution when the score reaches the review threshold: allow rules are void (rule 4).
+
+    The remaining rules are resolved as if no allow rule had fired (their reviews and boosts
+    apply); the allow rules are listed as suppressed with ALLOW_VS_SCORE_REASON. When no
+    block/review rule remains, decision is None and the caller applies the score review.
+    """
+    allows = sorted((r for r in triggered if r.action.decision == "allow"), key=sort_key)
+    rest = resolve([r for r in triggered if r.action.decision != "allow"], boost_min, boost_max)
+    return replace(
+        rest,
+        suppressed=(*rest.suppressed, *[(r.id, ALLOW_VS_SCORE_REASON) for r in allows]),
+        triggered=tuple(r.id for r in sorted(triggered, key=sort_key)),
     )

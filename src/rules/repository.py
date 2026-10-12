@@ -42,6 +42,7 @@ class RuleSettings:
     learned_params: dict[str, dict[str, Any]]
     external_params: dict[str, dict[str, Any]]
     time_column: str = "TransactionDT"
+    id_column: str = "TransactionID"
     entity_columns: list[str] = field(default_factory=list)
     learned: dict[str, Any] = field(default_factory=dict)
 
@@ -64,6 +65,7 @@ class RuleSettings:
             learned_params=dict(data.get("learned_params") or {}),
             external_params=dict(data.get("external_params") or {}),
             time_column=str(cool["time_column"]),
+            id_column=str(load_yaml("settings.yaml", config_dir)["data"]["id_column"]),
             entity_columns=list(load_yaml(cool["entity_config"], config_dir)["entity"]["columns"]),
             learned=dict(data.get("learned") or {}),
         )

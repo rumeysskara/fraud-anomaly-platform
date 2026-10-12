@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from src.core.config import ROOT_DIR
+from src.rules.cooldown import CooldownStore
 from src.rules.derive import add_derived
 from src.rules.engine import ADJUSTED, ADJUSTED_UNCLIPPED, ANOMALY, FINAL_UNCLIPPED, RuleEngine
 from src.rules.explain import render_message
@@ -21,6 +22,7 @@ from src.rules.report import decision_distribution, pick_conflict_examples, rule
 def synthetic_frame(neutral: dict, n: int = 300) -> tuple[pd.DataFrame, pd.DataFrame]:
     rng = np.random.default_rng(42)
     df = pd.DataFrame([neutral] * n, index=pd.Index(range(1000, 1000 + n), name="TransactionID"))
+    df["TransactionID"] = df.index
     df["TransactionAmt"] = rng.choice([5.0, 100.0, 500.0], n)
     df["small_amt_streak_1h"] = rng.integers(0, 4, n)
     df["card_age_days"] = rng.choice([0.0, 30.0], n)
@@ -146,9 +148,15 @@ def test_container_providers(monkeypatch):
     container = Container()
     repo = container.rule_repository()
     assert len(repo.rules) >= 10
-    fake = RuleEngine(repo, {})
+    fake = RuleEngine(repo, {}, CooldownStore())
     container.rule_engine.override(providers.Object(fake))
     assert container.rule_engine() is fake
+    # the engine provider is wired to the store Singleton (K7-2)
+    assert container.rule_engine.kwargs["cooldown_store"] is container.cooldown_store
+    assert container.cooldown_store() is container.cooldown_store()
+    stub = CooldownStore()
+    container.cooldown_store.override(providers.Object(stub))
+    assert container.cooldown_store() is stub
 
 
 def test_label_never_used_in_rules_code_or_config():
@@ -156,3 +164,28 @@ def test_label_never_used_in_rules_code_or_config():
     paths += [ROOT_DIR / "configs" / "rules.yaml", ROOT_DIR / "configs" / "rules_extra.json"]
     for path in paths:
         assert "isFraud" not in path.read_text(), path
+
+
+def test_factory_uses_injected_store_and_reload_rereads_params(tmp_path: Path, monkeypatch):
+    """load_rule_engine takes the store from outside; engine.reload() re-reads learned params."""
+    import shutil
+
+    from src.core.config import CONFIG_DIR
+    from src.rules import params as params_module
+    from src.rules.factory import load_rule_engine
+    from src.rules.repository import RuleRepository
+
+    for name in ("rules.yaml", "rules_extra.json", "entity.yaml", "settings.yaml"):
+        shutil.copy(CONFIG_DIR / name, tmp_path / name)
+    learned = {"amount_small": 1.0, "amount_high": 2.0, "velocity_1h_extreme": 3.0}
+    learned["score_review_threshold"] = 0.9
+    write_learned_block(tmp_path / "rules.yaml", learned)
+    monkeypatch.setattr(
+        params_module, "external_params", lambda settings, sample=False: {"trusted_min_history": 7}
+    )
+    store = CooldownStore()
+    engine = load_rule_engine(RuleRepository(tmp_path / "rules.yaml"), store)
+    assert engine.cooldown_store is store and engine.params["amount_high"] == 2.0
+    write_learned_block(tmp_path / "rules.yaml", {**learned, "amount_high": 500.0})
+    engine.reload()
+    assert engine.params["amount_high"] == 500.0

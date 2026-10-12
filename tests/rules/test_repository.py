@@ -26,7 +26,7 @@ JSON_RULE = {
 @pytest.fixture
 def config_dir(tmp_path: Path) -> Path:
     """Copy of configs/rules.yaml + rules_extra.json (+ entity.yaml for the key) in a temp dir."""
-    for name in ("rules.yaml", "rules_extra.json", "entity.yaml"):
+    for name in ("rules.yaml", "rules_extra.json", "entity.yaml", "settings.yaml"):
         shutil.copy(CONFIG_DIR / name, tmp_path / name)
     return tmp_path
 
