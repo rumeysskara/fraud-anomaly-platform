@@ -7,6 +7,13 @@ from dependency_injector import containers, providers
 from src.context.factory import load_engine
 from src.core.config import ARTIFACTS_DIR, CONFIG_DIR
 from src.features.pipeline import FeaturePipeline
+from src.rag.config import load_rag_settings
+from src.rag.embedder import OllamaEmbedder
+from src.rag.llm import OllamaLLMClient
+from src.rag.prompt import PromptBuilder
+from src.rag.retriever import HybridRetriever
+from src.rag.service import RAGService
+from src.rag.store import load_vector_store
 from src.rules.cooldown import CooldownStore
 from src.rules.factory import load_rule_engine
 from src.rules.repository import RuleRepository
@@ -39,6 +46,18 @@ class Container(containers.DeclarativeContainer):
     rule_engine = providers.Singleton(
         load_rule_engine, rule_repository, cooldown_store=cooldown_store
     )
+
+    # Step 8: local RAG (configs/rag.yaml). The FAISS index is only loaded (built offline by
+    # `make rag-index`); resolving the store without an index raises IndexNotBuiltError.
+    rag_settings = providers.Singleton(load_rag_settings, CONFIG_DIR)
+    embedder = providers.Singleton(OllamaEmbedder, rag_settings.provided.embedding)
+    llm_client = providers.Singleton(OllamaLLMClient, rag_settings.provided.llm)
+    vector_store = providers.Singleton(load_vector_store, rag_settings)
+    retriever = providers.Singleton(
+        HybridRetriever, embedder, vector_store, rag_settings.provided.retrieval
+    )
+    prompt_builder = providers.Singleton(PromptBuilder, rag_settings.provided.prompt)
+    rag_service = providers.Singleton(RAGService, retriever, llm_client, prompt_builder)
 
 
 def create_container() -> Container:

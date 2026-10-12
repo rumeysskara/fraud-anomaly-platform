@@ -1,0 +1,179 @@
+# Curated Turkish notes merged into the generated rule cards (src/rag/kb_builder.py).
+# Source: docs/step7.md (rationale, "Kurallar" table, "Bilinen sınırlar"), docs/step6.md and
+# docs/assumptions.md. The numbers are the ones reported in those documents (full data, holdout =
+# last 20% by TransactionDT). They are NOT used by any rule; the rule definitions live in
+# configs/rules.yaml, configs/rules_extra.json and configs/context.yaml.
+# If a rule changes, the cards regenerate from the configs; update the notes here by hand.
+
+rules:
+  R01:
+    rationale: >-
+      Aynı kart grubunda kısa sürede art arda küçük tutarlar klasik kart testi kalıbıdır:
+      çalıntı kartın çalışıp çalışmadığı küçük işlemlerle denenir. Adım 6'daki G1 koruması bu
+      sinyalin indirimle gizlenmesini engelliyordu; burada doğrudan block kararı verir.
+    limits:
+      - "Holdout'ta 1.129 tetiklenme, precision 0,131 (lift 3,81); fit'te lift 2,95. İki dönemde de tutarlı ve kuralların en faydalısı."
+      - "En çok tetiklenen entity adresi boş (addr1 yok) kart grubudur (card1 15885, pay %34,5): addr1 boşluğu tek seviye sayıldığı için bu grup birçok kartı birleştirir (entity proxy sınırı)."
+  R02:
+    rationale: >-
+      Yabancı ülkede yüksek tutar sınır ötesi kart kullanımı riskidir; düşük hacimli saatte
+      (tahmini yerel 00-06) olması hesap ele geçirme kalıbını güçlendirir. R02 tetiklenirse R05
+      de tetiklenir (R02 kapsanır); çakışma çözümü iki boost'un birlikte uygulanmasını önler.
+    limits:
+      - "Çok seyrek: fit'te 1, holdout'ta 1 tetiklenme. Precision ve lift istatistiksel olarak ölçülemez."
+      - "addr2 = 87 = ABD varsayımına ve saat dilimi/düşük hacim penceresi varsayımına bağlıdır (docs/assumptions.md 2-3)."
+  R03:
+    rationale: >-
+      Entity'nin kendi geçmiş günlük ortalamasının 3 katından fazla bir saatlik patlama, sık
+      işlem yapan entity'nin normal ritmini (Adım 6 C5) gerçek bir değişimden ayırır. Cooldown:
+      bir patlama tek bir uyarıdır; aynı entity için 1 saatte en fazla bir kez tetiklenir.
+    limits:
+      - "Cooldown sonrası etkisiz: fit'te 8, holdout'ta 21 tetiklenme, holdout precision 0. Cooldown öncesi holdout'ta 1.128 tetiklenmenin 1.123'ü tek bir entity'ye (card1 15775, addr1 330) aitti."
+      - "Cooldown durumu bellek içi ve tek süreçlidir; süreç yeniden başlarsa sıfırlanır."
+  R04:
+    rationale: >-
+      Kartın ilk gününde büyük alışveriş bust-out / çalıntı kart kalıbıdır; gerçek yeni müşteri
+      genelde küçük başlar.
+    limits:
+      - "Holdout'un %3,1'inde tetiklenir (3.675 satır) ama lift yalnızca 1,33 (fit 1,25): geniş kapsam, zayıf ayrım. Holdout sıralamasında en büyük zarar kaynağıdır; kullanıcı kararıyla değiştirilmedi."
+      - "ProductCD karışımından etkilenir; D1 = kart yaşı yorumu bir varsayımdır (docs/assumptions.md 5)."
+  R05:
+    rationale: >-
+      Yabancı ülke kodu ile yüksek tutar, sınır ötesi kart kullanımı riskidir.
+    limits:
+      - "Fit'te 54, holdout'ta 4 tetiklenme; fit lift 6,85 ama holdout ölçülemez (n=4)."
+      - "addr2 = 87 = ABD varsayımına bağlıdır (docs/assumptions.md 3)."
+  R06:
+    rationale: >-
+      Tutarın entity'nin kendi ortalamasının 5 katı olması davranış değişimidir; en az 5 geçmiş
+      işlem şartı ortalamanın anlamlı olmasını sağlar.
+    limits:
+      - "Fit'te genel sinyal yok (lift 0,98), holdout'ta zayıf (1,28); 2.094 holdout tetiklenmesi."
+  R07:
+    rationale: >-
+      Entity'nin ilk işleminde büyük alışveriş bust-out / çalıntı kart kalıbıdır; gerçek yeni
+      müşteri genelde küçük başlar.
+    limits:
+      - "Zayıf ayrım: fit lift 1,16, holdout 1,78 (294 tetiklenme)."
+      - "Entity bir kart grubudur (card1 + addr1), kişi değil; 'ilk işlem' kartın değil grubun ilk işlemidir."
+  R08:
+    rationale: >-
+      Cihaz/kimlik verisi olmayan yüksek tutar doğrulanamaz. ProductCD = W için identity kaydı
+      hiç olmadığından W hariç tutulur; aksi halde kural yalnızca "W ürünü" demek olurdu.
+    limits:
+      - "Fit'te 3, holdout'ta 1 tetiklenme; kapsamı ihmal edilebilir."
+  R09:
+    rationale: >-
+      Alıcı ve gönderen e-posta alanının farklı olması hediye/dropshipping gibi meşru nedenlerle
+      de olur. EDA'da P = R etkisi ProductCD ile karışıktır (docs/eda.md bulgu 2); etkisi
+      ayrıştırılamadığı için en düşük önem ve en küçük boost verildi.
+    limits:
+      - "İki dönem tutarsız: fit lift 1,51 (472 tetiklenme), holdout lift 9,84 (yalnızca 62 tetiklenme). Holdout değeri güvenilir değildir."
+      - "R_emaildomain boşluğunun yapısal olduğu varsayımına bağlıdır (docs/assumptions.md 8)."
+  R10:
+    rationale: >-
+      Adım 6'daki revize C4 tanımı: uzun geçmiş, kendi normal tutarı, tanıdık cihaz VE e-posta.
+      Kart testi sinyali varsa güven geçersizdir. allow kararı block'u ve skor kaynaklı
+      incelemeyi bastıramaz; yalnızca daha düşük öncelikli kural review'larını bastırır.
+    limits:
+      - "allow verilen 3.830 holdout satırının precision'ı 0,106 (lift 3,07; fit 2,26): 'trusted' düşük risk anlamına gelmiyor. Entity bir kart grubu olduğu için etiket aynı karta/e-postaya yayılıyor (docs/assumptions.md 9)."
+      - "En yoğun entity adresi boş kart grubudur (card1 15885, pay %18,5)."
+  R11:
+    rationale: >-
+      Ülke kodu yok, kur çevrimi görünümlü 3 ondalıklı tutar ve yüksek tutar: kaynağı
+      doğrulanamayan olası yabancı işlem.
+    limits:
+      - "Fit'te 4, holdout'ta 0 tetiklenme; ölçülemez."
+      - "3 ondalık = kur çevrimi zayıf bir topluluk yorumudur (docs/assumptions.md 7)."
+  R12:
+    rationale: >-
+      Tatil tepesinde yeni kartla büyük alışveriş: yoğunluk içinde gizlenen bust-out.
+    limits:
+      - "Holdout'ta hiç tetiklenmez: öğrenilen sezon (2017-12-19 ... 2017-12-26) fit dönemine düşer. Fit'te 1.300 tetiklenme ve lift 0,59 (ters yön)."
+      - "Sezon tek bir Aralık'tan öğrenildi, başka yıllara genellenemez (docs/assumptions.md 10)."
+
+conflict_resolution:
+  - "Küçük priority değeri kazanır (1 en yüksek öncelik)."
+  - "Aynı öncelikte yüksek severity kazanır (critical > high > medium > low)."
+  - "Ardından block > review > allow sırası uygulanır."
+  - "allow yalnızca daha düşük öncelikli KURAL review'larını bastırabilir. Tetiklenen herhangi bir block, öncelikten bağımsız olarak allow'u yener; aynı veya daha yüksek öncelikli review de allow'u yener."
+  - "Boost öncesi skor (adjusted_score_unclipped) skor inceleme eşiğine (fit q99) ulaşırsa allow geçersizdir ve kurallar allow kuralları olmadan yeniden çözülür."
+  - "Kararı final kararla aynı olan kurallar uygulanır; diğerleri gerekçesiyle bastırılır ve boost'ları eklenmez."
+  - "Uygulanan boost'ların toplamı [-0,10, +0,40] aralığına kırpılır; final_score_unclipped = adjusted_score_unclipped + toplam boost. Alarm sıralaması kırpılmamış değerle yapılır, final_score [0,1]'e kırpılmış çıktıdır."
+  - "Hiçbir kural karar vermezse: skor eşiğe ulaşıyorsa review, aksi halde allow (varsayılan)."
+
+context:
+  C1:
+    rationale: >-
+      Meşru alışverişin çoğu yerel çalışma saatlerinde olur; daha önce görülmüş bir kart grubunun bu saatte işlem yapması en az şaşırtıcı durumdur. Yerel saat bir tahmindir (-6 saat ofseti).
+    limits:
+      - "Holdout ablation'da zararlı göründü (çıkarılınca %1 bütçede FP 983 -> 969); etiketle ayar yasağı nedeniyle değiştirilmedi (K-20b)."
+      - "Yerel saat tahmini (-6 saat ofseti) ve hafta içi/sonu referans tarih varsayımına bağlıdır (docs/assumptions.md 1, 2, 4). Satırların yaklaşık %41'inde tetiklenir."
+  C2:
+    rationale: >-
+      Herkes uyurken yapılan büyük tutarlı alışveriş hesap ele geçirme kalıbıdır (saldırgan hesap sahibi uyurken işlem yapar). Yalnızca yüksek tutarlar yükseltilir, sıradan gece işlemleri cezalandırılmaz.
+    limits:
+      - "Çok az satırda tetiklenir (%0,34 fit / %0,48 holdout)."
+      - "Düşük hacim penceresi bir saat dilimi varsayımıdır (docs/assumptions.md 2)."
+  C3:
+    rationale: >-
+      Hafta sonu alışverişi tüketici davranışı olarak normaldir; yerleşik geçmişi olan kart grubu için tek başına şüpheli değildir. Yalnızca küçük bir indirimdir.
+    limits:
+      - "Holdout ablation'da zararlı göründü (çıkarılınca %1'de FP 983 -> 939); değiştirilmedi (K-20b)."
+      - "Hafta sonu, 2017-12-01 referans tarihi varsayımına bağlıdır."
+  C4:
+    rationale: >-
+      Uzun geçmiş, entity'nin kendi normal tutar aralığı ve tanıdık cihaz VE e-posta birlikte, her zamanki gibi davranan geri dönen müşteriyi anlatır; anomali modellerinin ana yanlış pozitif kaynağı bu nadir ama normal müşterilerdir. 'Güvenilir' küçük bir azınlık olmalıdır, bu yüzden geçmiş eşiği yüksek bir fit kuantilidir. En güçlü indirimdir, sınırlıdır ve kart testi koruması (G1) tarafından geçersiz kılınır.
+    limits:
+      - "Kapsam hedefin altında: fit %2,0 / holdout %4,0 (hedef %10-15). Sınırlayan koşul 'bilinen cihaz' (identity kaydı olan işlemlerle sınırlı)."
+      - "İyileşme küçük: %1'de -12, %5'te -154 FP, tek holdout üzerinde, güven aralığı yok."
+  C5:
+    rationale: >-
+      Adım 5 bulgusu: temporal üst %1'in %96'sı tek bir yüksek hacimli kart grubunun burst'ü. Her zaman sık işlem yapan entity için yüksek velocity normal ritimdir; bu durumda temporal katman az bilgi taşır ve ağırlığı yarıya iner. Entity'nin günlük ortalamasının 3 katını aşan gerçek değişim tam ağırlıkla kalır.
+    limits:
+      - "Adım 5'teki burst entity'sini yakalamaz: o burst entity'nin kendi geçmişine göre gerçek bir değişimdir."
+  C6a:
+    rationale: >-
+      Sınır ötesi işlem klasik bir risk faktörüdür (kart ana pazarı dışında kullanılıyor). addr2 = 87 = ABD bir topluluk yorumudur.
+    limits:
+      - "addr2 = 87 = ABD varsayımına bağlıdır (docs/assumptions.md 3). Fit %0,83, holdout %0,36 tetiklenme."
+  C6b:
+    rationale: >-
+      Fatura ülkesi yok ve tutar kur çevrimi görünümlü: kaynağı doğrulanamayan olası yabancı işlem. İki sinyal de yorum olduğu için C6a'dan küçük çarpan.
+    limits:
+      - "Her iki sinyal de yorumdur (ülkesiz + 3 ondalık). C satırlarının %88'inde C9a ile birlikte aday olur; dışlayıcı grup yüzünden yalnızca büyük çarpan uygulanır (x1,10)."
+  C7:
+    rationale: >-
+      Tatil tepesinde herkes daha sık alışveriş yapar; velocity ve hacim alarmlarının bir kısmı mevsimsel gürültüdür. Yalnızca temporal katmanın baskın olduğu skorlar indirilir; tutar veya cihaz anomalilerine dokunulmaz.
+    limits:
+      - "Holdout'ta ölçülemez: sezon penceresi fit dönemindedir. Kural gelecek Aralık için config'te durur."
+  C8:
+    rationale: >-
+      Kartın ilk gününde büyük alışveriş bilinen bir bust-out / çalıntı kart kalıbıdır; gerçek yeni müşteri genelde küçük başlar. D1 = kart yaşı veriyle desteklenen bir yorumdur.
+    limits:
+      - "D1 = kart yaşı yorumuna bağlıdır (docs/assumptions.md 5). Satırların yaklaşık %5'inde tetiklenir."
+  C9a:
+    rationale: >-
+      C ürünü azınlıktır (satırların %11,6'sı), çoğunlukla (%91) online kimlik/cihaz verisiyle ve çoğunlukla (%95) fatura ülkesi olmadan gelir; yani kart-yok (CNP) ve olası sınır ötesi dijital kanal. Küçük bir temel çarpandır. EDA tablosu yalnızca makullük kontrolü olarak kullanıldı, değer seçmek için değil.
+    limits:
+      - "Dışlayıcı grup geo_product içindedir: C6a/C6b ile aynı satırda yalnızca en büyük çarpan uygulanır. Fiilen yalnızca C6b'nin tetiklenmediği C satırlarında görünür (holdout %0,9)."
+      - "Yön fit EDA tablosuyla uyumludur (holdout değil); değer o tablodan seçilmedi."
+  C9b:
+    rationale: >-
+      W ana akım üründür (satırların %74,5'i); anomali katmanlarının 'normal' tanımı büyük ölçüde W üzerinde kalibre edilmiştir, bu yüzden küçük bir tolerans uygulanır.
+    limits:
+      - "Dışlayıcı grup geo_product içindedir. Holdout satırlarının yaklaşık %79'unda tetiklenir; küçük bir tolerans çarpanıdır."
+  G1:
+    rationale: >-
+      Aynı kart grubunda küçük tutarlar patlaması klasik kart testi kalıbıdır. Context indirimleri
+      (iş saati, güvenilir entity, ürün) bu kalıbı gizlememelidir; bu yüzden toplam çarpan 1,0'ın
+      altına inemez ve hiçbir düzeltme skoru ham skorun altına indiremez.
+    limits:
+      - "Koşul fit'te %1,8, holdout'ta %1,4 satırda sağlanır."
+      - "Toplam çarpan 1,0'ın altına inemez; yalnızca indirimi engeller, skoru ayrıca yükseltmez."
+
+context_notes:
+  - "Toplam çarpan [0,5, 1,5] aralığına kırpılır; sonuç adjusted_score = clip(raw_score x toplam, 0, 1)."
+  - "Dışlayıcı grup (exclusive_group) içinde birden fazla kural tetiklenirse yalnızca en büyük çarpanlı olan uygulanır."
+  - "Kart testi koruması (G1) tetiklenirse toplam çarpan 1,0'ın altına inemez."
+  - "Alarm sıralaması kırpılmamış skorla (adjusted_score_unclipped) yapılır."

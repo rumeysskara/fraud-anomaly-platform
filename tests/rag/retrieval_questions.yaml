@@ -1,0 +1,22 @@
+# Written BEFORE running the real retrieval (not tuned to the result). Each question has one
+# expected chunk: a rule id (the chunk's rule_ids must contain it) and/or a document type.
+- question: "Kart testi şüphesi hangi koşulda tetiklenir?"
+  expect: {rule_id: R01, doc_type: rule_card}
+- question: "Velocity patlaması kuralı aynı entity için neden bir saatte en fazla bir kez tetiklenir?"
+  expect: {rule_id: R03, doc_type: rule_card}
+- question: "Güvenilir entity için allow kararı hangi şartlarda verilir?"
+  expect: {rule_id: R10, doc_type: rule_card}
+- question: "Alıcı ve gönderen e-posta farklı olduğunda kural neden düşük önemde?"
+  expect: {rule_id: R09, doc_type: rule_card}
+- question: "ProductCD W olan işlemlere context katmanı nasıl bir çarpan uygular?"
+  expect: {rule_id: C9b, doc_type: context_card}
+- question: "Kart testi sinyali varken context indirimleri skoru neden düşüremez?"
+  expect: {rule_id: G1, doc_type: context_card}
+- question: "small_amt_streak_1h feature'ı neyi ölçer?"
+  expect: {doc_type: feature_dictionary}
+- question: "Bir işlem review kararı aldığında analist hangi adımları izlemeli?"
+  expect: {doc_type: operations}
+- question: "Gece düşük hacimli saatlerde yüksek tutarlı işlem neden riskli sayılır?"
+  expect: {doc_type: typology, rule_id: C2}
+- question: "Aynı anda hem block hem allow kuralı tetiklenirse hangisi kazanır?"
+  expect: {doc_type: rule_card, chunk_id: "rule_cards#cakisma-cozumu-conflict-resolution"}

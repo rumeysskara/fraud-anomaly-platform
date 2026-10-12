@@ -20,3 +20,4 @@ extend-exclude = '/(\.venv)/'
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["ollama: needs a running Ollama and the built RAG index (run with -m ollama)"]

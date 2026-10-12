@@ -79,8 +79,14 @@ class Retriever(ABC):
     """Knowledge-base retrieval."""
 
     @abstractmethod
-    def retrieve(self, query: str, k: int = 4) -> list[Chunk]:
-        """Return the top-k chunks for the query."""
+    def retrieve(
+        self, query: str, k: int = 4, filters: dict[str, Any] | None = None
+    ) -> list[Chunk]:
+        """Return the top-k chunks for the query.
+
+        `filters` (optional, backward compatible) restricts or boosts by chunk metadata, e.g.
+        {"rule_ids": ["R01"], "doc_types": ["rule_card"]} (Step 8).
+        """
 
 
 class LLMClient(ABC):

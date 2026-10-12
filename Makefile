@@ -1,6 +1,6 @@
 PY ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: install lint format test profile features score pipeline index api
+.PHONY: install lint format test profile features score pipeline index rag-index api
 
 install:
 	$(PY) -m pip install -r requirements.txt
@@ -30,6 +30,9 @@ pipeline:
 
 index:
 	$(PY) scripts/run_pipeline.py --only index
+
+rag-index:
+	$(PY) scripts/build_rag_index.py
 
 api:
 	$(PY) -m uvicorn src.api.main:app --reload

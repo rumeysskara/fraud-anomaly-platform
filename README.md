@@ -17,7 +17,17 @@ make install
 Hızlı geliştirme için: `SAMPLE_N=50000 make pipeline` (zamana göre ilk N satır).
 
 ## Ollama
-(Adım 8 sonrası doldurulacak: Ollama kurulumu, model indirme komutları.)
+Tüm LLM ve embedding işleri yerel Ollama ile yapılır (ücretli API yok).
+```bash
+ollama serve                 # ayrı bir terminalde (veya Ollama uygulaması açık)
+ollama pull bge-m3           # embedding
+ollama pull qwen2.5:7b       # LLM (16 GB RAM'e sığar)
+make rag-index               # bilgi tabanını üret, chunk'la, embed et -> artifacts/rag/
+python scripts/build_rag_index.py --question "Kart testi hangi koşulda tetiklenir?"
+.venv/bin/python -m pytest -m ollama -s tests/rag   # gerçek retrieval testi (hit@k)
+```
+`make test` Ollama gerektirmez. Ollama kapalıysa RAG servisi yalnızca retrieval sonucu döner
+(`llm_unavailable`). Ayrıntı: `docs/step8.md`.
 
 ## Çalıştırma
 ```bash

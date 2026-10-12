@@ -1,0 +1,103 @@
+# Step 8 - local RAG (decisions K-28...). Everything tunable lives here; src/rag has no constants.
+# Local only: Ollama serves both the embedding model and the LLM. The fraud label is never used.
+
+seed: 42
+
+paths:
+  knowledge_base_dir: knowledge_base        # *.md files below this folder are indexed
+  generated_dir: knowledge_base/generated   # rule/context cards are written here (auto-generated)
+  rule_notes: knowledge_base/sources/rule_notes.yaml
+  context_params: artifacts/context/context_params.json   # learned values shown in context cards
+  index_dir: artifacts/rag                  # FAISS index + chunk metadata (built offline)
+
+embedding:
+  host: http://localhost:11434
+  model: bge-m3
+  timeout_seconds: 60
+  batch_size: 16
+
+llm:
+  host: http://localhost:11434
+  model: qwen2.5:7b
+  fallback_model: qwen2.5:3b     # tried only when the primary model is not installed
+  timeout_seconds: 180
+  temperature: 0.1
+  num_ctx: 8192
+
+chunking:
+  # Safety cap only (K-30): a section is split at structure boundaries (paragraph / list item)
+  # when its estimated token count exceeds this. Tables are never split.
+  max_tokens: 768
+  chars_per_token: 3.0           # rough estimate for Turkish text; used only for the safety cap
+
+retrieval:
+  k: 4
+  metadata_quota: 2              # slots reserved for chunks matching the triggered rule ids
+  rule_filter_doc_types: [rule_card, context_card]   # doc types preferred by the rule-id filter
+
+prompt:
+  system: >-
+    Sen bir dolandırıcılık analizi asistanısın. YALNIZCA aşağıdaki BAĞLAM bölümündeki bilgilere
+    dayanarak Türkçe cevap ver. Cevap bağlamda yoksa aynen "Bilgi tabanında bu bilgi yok."
+    de; tahmin etme, kural, eşik veya sayı uydurma. Kullandığın her bilgi için kaynak chunk
+    ID'sini köşeli parantez içinde belirt, örneğin [rule_cards#r01-card-testing]. Cevabı kısa
+    ve net tut.
+  context_header: "BAĞLAM (kaynak chunk'lar):"
+  passage: "[{chunk_id}] {heading}\n{text}"
+  no_context: "(İlgili bağlam bulunamadı.)"
+  explanation_header: "İŞLEM SONUCU (kural motoru çıktısı):"
+  question_header: "SORU:"
+  answer_reminder: >-
+    Cevabını yalnızca BAĞLAM'a dayandır ve son satıra "Kaynaklar:" yazıp kullandığın chunk
+    ID'lerini köşeli parantezle sırala.
+  explanation_keys:              # keys of the rule engine explain payload shown to the model
+    - final_decision
+    - triggered_rules
+    - flags
+    - reasons
+    - adjusted_score
+    - final_score
+
+# Turkish labels used when rule conditions are written in plain language (kb_builder).
+operator_labels:
+  ">": "büyük"
+  ">=": "büyük veya eşit"
+  "<": "küçük"
+  "<=": "küçük veya eşit"
+  "==": "eşit"
+  "!=": "eşit değil"
+  in: "şunlardan biri"
+  not_in: "şunlardan hiçbiri değil"
+  between: "aralığında (uçlar dahil)"
+  is_null: "boş"
+  contains: "içeriyor"
+  isna: "boş"
+  notna: "dolu"
+
+feature_labels:
+  TransactionAmt: "işlem tutarı (USD)"
+  small_amt_streak_1h: "entity'nin son 1 saatteki önceki küçük tutarlı işlem sayısı"
+  ent_cnt_1h: "entity'nin son 1 saatteki önceki işlem sayısı"
+  burst_ratio_1h: "1 saatlik sayının entity'nin geçmiş günlük ortalamasına oranı"
+  burst_ratio_24h: "24 saatlik sayının entity'nin geçmiş günlük ortalamasına oranı"
+  ent_daily_avg: "entity'nin geçmiş günlük ortalama işlem sayısı"
+  ent_txn_count: "entity'nin önceki işlem sayısı"
+  ent_age_days: "entity'nin ilk işleminden bu yana gün"
+  amt_ratio_to_ent_avg: "tutarın entity'nin geçmiş ortalamasına oranı"
+  amt_zscore_ent: "tutarın entity geçmişine göre z-skoru"
+  abs_amt_zscore_ent: "tutarın entity geçmişine göre mutlak z-skoru"
+  card_age_days: "kart yaşı (D1, gün)"
+  is_first_seen: "entity'nin ilk işlemi mi (1 = evet)"
+  foreign_addr2: "yabancı ülke kodu (addr2 baskın değerden farklı, 1 = evet)"
+  addr2: "ülke kodu (addr2)"
+  is_low_volume_window: "düşük hacimli saat penceresi (1 = evet)"
+  local_hour_est: "tahmini yerel saat"
+  is_weekend: "hafta sonu (1 = evet)"
+  has_identity: "identity (cihaz/kimlik) kaydı var mı (1 = evet)"
+  ProductCD: "ürün kodu"
+  email_mismatch: "alıcı ve gönderen e-posta alanı dolu ve farklı (1 = evet)"
+  amt_has_3dec: "tutar 3 ondalıklı (1 = evet)"
+  holiday_season: "öğrenilmiş tatil sezonu (1 = evet)"
+  known_device: "cihaz entity tarafından daha önce kullanıldı (1 = evet)"
+  known_email: "e-posta alanı entity tarafından daha önce kullanıldı (1 = evet)"
+  dominant_layer: "skora en çok katkı veren anomali katmanı"
