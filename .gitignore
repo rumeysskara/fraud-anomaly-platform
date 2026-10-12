@@ -14,3 +14,4 @@ reports/**/*.parquet
 
 CLAUDE.local.md
 notes/
+reports/features/sample/season_threshold_sensitivity.csv
