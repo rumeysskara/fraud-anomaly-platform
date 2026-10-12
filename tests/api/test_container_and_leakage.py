@@ -35,9 +35,9 @@ def test_api_providers_are_injected_not_built_in_services() -> None:
 def test_api_agents_use_a_separate_bus_and_the_api_deadline() -> None:
     container = Container()
     api = container.api_settings()
-    assert api.llm.timeout_seconds == 60.0
+    assert api.llm.timeout_seconds == 120.0
     capped = container.api_agents_settings()
-    assert capped.planner.timeout_seconds == 10.0 and capped.explainer.timeout_seconds == 50.0
+    assert capped.planner.timeout_seconds == 10.0 and capped.explainer.timeout_seconds == 110.0
     assert container.agents_settings().explainer.timeout_seconds == 240.0  # Step 9 unchanged
     assert container.api_message_bus() is not container.message_bus()
 
@@ -74,7 +74,7 @@ def test_artifact_set_follows_sample_n() -> None:
 
 
 def test_api_settings_default_when_file_is_missing(tmp_path: Path) -> None:
-    assert load_api_settings(tmp_path).llm.timeout_seconds == 60.0
+    assert load_api_settings(tmp_path).llm.timeout_seconds == 120.0
 
 
 def test_no_label_in_api_code_or_examples() -> None:

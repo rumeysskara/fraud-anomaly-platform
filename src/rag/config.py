@@ -41,6 +41,7 @@ class LLMConfig(BaseModel):
     num_ctx: int = 4096
     seed: int = 42
     keep_alive: str = "30m"  # how long Ollama keeps the model loaded after a request
+    num_predict: int | None = None  # max generated tokens (None: Ollama default)
 
 
 class ChunkingConfig(BaseModel):

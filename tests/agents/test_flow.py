@@ -43,21 +43,24 @@ def test_trace_entries_have_who_what_how_long(make_system) -> None:
 
 def test_rule_agent_delegates_to_context_and_anomaly(make_system) -> None:
     system = make_system(llm=None)
-    system.llm.answer = plan_json("rule:evaluate")
+    # K-51: a question plan must contain the explainer; anomaly/context may still be left out.
+    system.llm.answer = plan_json("rule:evaluate", "explainer:explain")
     response = system.coordinator.analyze(
         AnalystRequest(record=dict(RECORD), question="sadece karar")
     )
-    assert response.plan.source == "llm" and response.plan.steps == ["rule:evaluate"]
-    assert _pairs(response) == [
+    assert response.plan.source == "llm"
+    assert response.plan.steps == ["rule:evaluate", "explainer:explain"]
+    assert _pairs(response)[:4] == [
         ("client", "coordinator", "analyze"),
         ("coordinator", "rule", "evaluate"),
         ("rule", "context", "adjust"),
         ("context", "anomaly", "score"),
     ]
+    assert ("coordinator", "explainer", "explain") in _pairs(response)
     by_id = {t.message_id: t for t in response.trace}
     anomaly = response.trace[3]
     assert by_id[anomaly.parent_id].recipient == "context"  # parent links form the chain
-    assert response.decision == "review" and response.explanation is None
+    assert response.decision == "review" and response.explanation is not None
     assert response.anomaly_score == 0.7 and response.context_rules == ["C3"]
     assert system.scoring.calls == 1
 

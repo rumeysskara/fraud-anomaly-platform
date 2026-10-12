@@ -32,8 +32,9 @@ def test_valid_llm_plan_is_used(make_system) -> None:
 
 
 def test_json_wrapped_in_text_is_accepted(make_system, settings) -> None:
-    planner = Planner(FakePlannerLLM("Plan:\n" + plan_json("rule:evaluate") + "\nbitti"), settings)
-    assert planner.plan(QUESTION).steps == ["rule:evaluate"]
+    answer = "Plan:\n" + plan_json("rule:evaluate", "explainer:explain") + "\nbitti"
+    planner = Planner(FakePlannerLLM(answer), settings)
+    assert planner.plan(QUESTION).steps == ["rule:evaluate", "explainer:explain"]
 
 
 @pytest.mark.parametrize(
@@ -49,6 +50,7 @@ def test_json_wrapped_in_text_is_accepted(make_system, settings) -> None:
         ('{"steps":[{"agent":"rule","intent":"evaluate","decision":"allow"}]}', "invalid plan"),
         (plan_json("explainer:explain", "rule:evaluate"), "order"),
         (plan_json("rule:evaluate", "rule:evaluate"), "repeated"),
+        (plan_json("anomaly:score", "context:adjust", "rule:evaluate"), "no explanation step"),
     ],
 )
 def test_invalid_plans_fall_back_to_default(make_system, answer: str, reason: str) -> None:
@@ -124,3 +126,19 @@ def test_llm_cannot_change_the_decision(make_system) -> None:
     assert response.decision_source == "R01"
     assert response.explanation is not None and "allow" in (response.explanation.text or "")
     assert system.engine.calls[0]["score"] == 0.55  # LLM text never feeds the engine
+
+
+def test_question_plan_without_explainer_falls_back_with_trace(make_system) -> None:
+    llm = FakePlannerLLM(plan_json("rule:evaluate"))
+    response = make_system(llm=llm).coordinator.analyze(
+        AnalystRequest(record=dict(RECORD), question=QUESTION)
+    )
+    assert response.plan.source == "fallback"
+    assert "explainer:explain" in response.plan.steps
+    assert "no explanation step" in (response.plan.fallback_reason or "")
+    assert len(_fallback_events(response)) == 1
+    assert response.explanation is not None  # the analyst gets an explanation
+
+
+def test_explanation_step_is_not_required_without_a_question(settings) -> None:
+    assert Planner(None, settings).validate(plan_json("rule:evaluate")) == ["rule:evaluate"]

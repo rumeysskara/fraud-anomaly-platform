@@ -37,4 +37,4 @@ def test_invalid_rule_set_example_is_a_valid_request_but_an_invalid_rule_set() -
 
 
 def test_api_yaml_sets_the_60_second_llm_deadline() -> None:
-    assert load_api_settings().llm.timeout_seconds == 60
+    assert load_api_settings().llm.timeout_seconds == 120

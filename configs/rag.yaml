@@ -25,6 +25,7 @@ llm:
   temperature: 0.0
   num_ctx: 8192
   keep_alive: 30m                # Ollama keeps the model loaded this long after a request (K-50)
+  num_predict: 300               # cap on generated tokens; keeps the answer inside the API budget (K-51)
 
 chunking:
   # Safety cap only (K-30): a section is split at structure boundaries (paragraph / list item)
@@ -44,8 +45,8 @@ prompt:
     dayanarak Türkçe cevap ver. Sorunun cevabı bağlamda açıkça yoksa yalnızca şunu yaz:
     "Bilgi tabanında bu konuda bilgi yok." Tahmin etme; bağlamda geçmeyen kural, eşik, sayı veya
     ifade uydurma; bir sayıyı ancak sorulan şeyin aynısıysa kullan. Kullandığın her bilgi için kaynak chunk
-    ID'sini köşeli parantez içinde belirt, örneğin [rule_cards#r01-card-testing]. Cevabı kısa
-    ve net tut.
+    ID'sini köşeli parantez içinde belirt, örneğin [rule_cards#r01-card-testing]. Cevabı 4-6
+    cümleyle, kısa ve net yaz.
   few_shot: >-
     ÖRNEK (bağlamda cevap yok):
     Soru: Kuralların toplam doğruluk oranı yüzde kaçtır?

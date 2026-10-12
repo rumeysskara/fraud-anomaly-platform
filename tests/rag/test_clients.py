@@ -114,3 +114,16 @@ def test_real_config_uses_temperature_zero_and_abstain_threshold() -> None:
     assert 0 < settings.retrieval.abstain_threshold < 1
     assert "Bilgi tabanında bu konuda bilgi yok" in settings.prompt.system
     assert settings.prompt.few_shot
+
+
+def test_llm_sends_num_predict_only_when_configured() -> None:
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"message": {"content": "ok"}})
+
+    OllamaLLMClient(LLM.model_copy(update={"num_predict": 300}), client(handler)).generate("q")
+    OllamaLLMClient(LLM, client(handler)).generate("q")
+    assert bodies[0]["options"]["num_predict"] == 300
+    assert "num_predict" not in bodies[1]["options"]

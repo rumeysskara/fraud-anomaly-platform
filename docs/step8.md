@@ -56,7 +56,7 @@ Neden yapıya duyarlı: kural kartı veya prosedür adımları ortasından kesil
 3. Her sonuç `metadata["retrieval"]` ile "metadata" veya "semantic" işaretlenir. `filters["doc_types"]` tüm sonuçları belge türüyle sınırlar.
 
 ## LLM bağlamı ve çıktı (K-32)
-Prompt şablonu `configs/rag.yaml` içindedir. Sistem talimatı: yalnızca BAĞLAM'dan Türkçe cevap ver; bağlamda yoksa aynen "Bilgi tabanında bu konuda bilgi yok" de; tahmin etme, kural/eşik/sayı uydurma; kaynak chunk id'lerini köşeli parantezle yaz. Sistem mesajı = talimat + numaralı parçalar (`[chunk_id] başlık` + metin). Kullanıcı mesajı = (varsa) kural motoru çıktısının seçili alanları (`final_decision`, `triggered_rules`, `flags`, `reasons`, skorlar) + soru + "Kaynaklar:" hatırlatması. `LLMClient.generate(prompt, context)`: `prompt` kullanıcı, `context` sistem mesajıdır.
+Prompt şablonu `configs/rag.yaml` içindedir. Sistem talimatı: yalnızca BAĞLAM'dan Türkçe cevap ver; bağlamda yoksa aynen "Bilgi tabanında bu konuda bilgi yok" de; tahmin etme, kural/eşik/sayı uydurma; kaynak chunk id'lerini köşeli parantezle yaz; cevabı 4-6 cümleyle yaz. Üretim `llm.num_predict: 300` token ile sınırlıdır (K-51). Sistem mesajı = talimat + numaralı parçalar (`[chunk_id] başlık` + metin). Kullanıcı mesajı = (varsa) kural motoru çıktısının seçili alanları (`final_decision`, `triggered_rules`, `flags`, `reasons`, skorlar) + soru + "Kaynaklar:" hatırlatması. `LLMClient.generate(prompt, context)`: `prompt` kullanıcı, `context` sistem mesajıdır.
 
 `RAGService.answer(question, explanation=None, rule_ids=None, k=None) -> RAGAnswer`:
 ```

@@ -25,6 +25,9 @@ workflow:
     - {agent: explainer, intent: explain}
   # This step must be in every plan; the decision comes only from it.
   required_step: {agent: rule, intent: evaluate}
+  # K-51: a request with an analyst question gets an answer, so an LLM plan (only made when there
+  # is a question) must contain the explanation step; otherwise it is rejected (plan_fallback).
+  question_required_step: {agent: explainer, intent: explain}
 
 bus:
   max_depth: 6          # delegation depth limit (protects against loops)
@@ -39,7 +42,7 @@ planner:
     {catalog}
     Rules: use only the agents and intents above, at most once each, in this order:
     anomaly, context, rule, explainer. The step rule:evaluate is mandatory (it makes the
-    decision). Add explainer:explain only if the analyst asks for an explanation or a note.
+    decision). The step explainer:explain is also mandatory (the analyst asked a question).
     Leave out anomaly and context if the analyst asks only for the decision (rule fetches
     what it needs by itself).
     JSON format: {{"steps": [{{"agent": "rule", "intent": "evaluate"}}]}}

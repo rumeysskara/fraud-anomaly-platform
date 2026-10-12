@@ -68,7 +68,7 @@ Koordinatör her adıma o ana kadarki sonuçları verir. Bir adımda girdi eksik
 
 ### Planlama (K-37)
 - Soru yoksa: varsayılan plan, LLM çağrılmaz.
-- Soru varsa: yerel LLM'den `{"steps":[{"agent","intent"}]}` istenir. Pydantic doğrulaması: ek alan yok, yalnızca config'teki agent:intent çiftleri, tekrar yok, bağımlılık sırasında, `rule:evaluate` zorunlu. LLM kapalı, zaman aşımı (batch/demo 60 sn, API 10 sn), geçersiz JSON, izinsiz agent, sıra hatası veya eksik kural adımı: varsayılan plana düşülür ve trace'e `plan_fallback` + sebep yazılır.
+- Soru varsa: yerel LLM'den `{"steps":[{"agent","intent"}]}` istenir. Pydantic doğrulaması: ek alan yok, yalnızca config'teki agent:intent çiftleri, tekrar yok, bağımlılık sırasında, `rule:evaluate` zorunlu, soru varsa `explainer:explain` de zorunlu (K-51; `workflow.question_required_step`). LLM kapalı, zaman aşımı (batch/demo 60 sn, API 10 sn), geçersiz JSON, izinsiz agent, sıra hatası, eksik kural adımı veya eksik açıklama adımı: varsayılan plana düşülür ve trace'e `plan_fallback` + sebep yazılır.
 - Plan karar kaynağını değiştiremez: kural adımı zorunlu, karar yalnızca `EvaluateReply`'dan kopyalanır, `ExplainReply` tipinde karar alanı yoktur. Testler: LLM'in "decision: allow" eklemesi reddedilir, açıklama metni "allow" dese de karar `block` kalır, kural adımsız plan reddedilir.
 
 ## Dayanıklılık (K-38)

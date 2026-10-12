@@ -29,10 +29,12 @@ class StepConfig(BaseModel):
 
 
 class WorkflowConfig(BaseModel):
-    """Default plan and the mandatory step."""
+    """Default plan and the mandatory steps."""
 
     default_plan: list[StepConfig]
     required_step: StepConfig
+    # K-51: mandatory in an LLM plan when the request carries an analyst question.
+    question_required_step: StepConfig | None = None
 
 
 class BusConfig(BaseModel):

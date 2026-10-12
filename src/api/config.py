@@ -21,9 +21,9 @@ class LLMSettings(BaseModel):
     them (Step 8-10 review, Ö5); their sum may not exceed the total.
     """
 
-    timeout_seconds: float = Field(default=60.0, gt=0)
+    timeout_seconds: float = Field(default=120.0, gt=0)
     planner_timeout_seconds: float = Field(default=10.0, gt=0)
-    explainer_timeout_seconds: float = Field(default=50.0, gt=0)
+    explainer_timeout_seconds: float = Field(default=110.0, gt=0)
 
     @model_validator(mode="after")
     def _split_fits_total(self) -> LLMSettings:
@@ -83,7 +83,7 @@ def agent_settings_for_api(agents: AgentSettings, api: ApiSettings) -> AgentSett
     """Copy of the agent settings whose LLM deadlines are capped by the API budget split.
 
     configs/agents.yaml keeps the long batch/demo limits (explainer 240 s); the API caps the
-    planner and the explainer with their share of `llm.timeout_seconds` (default 10 s + 50 s), so
+    planner and the explainer with their share of `llm.timeout_seconds` (default 10 s + 110 s), so
     /explain answers within the total and returns the facts when that is not enough.
     """
     llm = api.llm

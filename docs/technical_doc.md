@@ -898,7 +898,7 @@ timestamp, payload_keys, detail`. Bus dışı olaylar (`plan_fallback`, `explana
 - Varsayılan plan: `anomaly:score -> context:adjust -> rule:evaluate -> explainer:explain`. Soru yoksa LLM çağrılmaz.
 - Soru varsa LLM'den JSON plan istenir: `{"steps":[{"agent","intent"}]}`. **Doğrulama (K-37):** ek alan yok,
   yalnızca config'teki agent:intent çiftleri, tekrar yok, bağımlılık sırası korunur, `rule:evaluate`
-  zorunlu. Herhangi bir ihlal planı onarmadan reddeder ve varsayılan plana düşer (trace'te `plan_fallback` + sebep).
+  zorunlu; soru varsa `explainer:explain` de zorunlu (K-51). Herhangi bir ihlal planı onarmadan reddeder ve varsayılan plana düşer (trace'te `plan_fallback` + sebep).
 - Plan karar kaynağını değiştiremez: karar yalnızca RuleAgent cevabından kopyalanır; açıklama cevabının tipinde karar alanı yoktur.
 - Eksik girdide agent bus üzerinden ister: RuleAgent skor almamışsa ContextAgent'a `adjust`, ContextAgent da
   AnomalyAgent'a `score` yollar. Agent'lar birbirini import etmez. Delegation derinliği 6 ile sınırlı.
@@ -1017,14 +1017,17 @@ bağlamı yanlış özetleyebiliyor; tek metin alanında yanlış bir rakam anal
 | `unavailable` | Ollama veya embedding modeli kapalı / indeks yok |
 | `timeout` | Süre bütçesi doldu |
 | `empty` | LLM kullanılabilir metin üretmedi |
-| `skipped` | Çalışan planda açıklama adımı yoktu |
+| `skipped` | Çalışan planda açıklama adımı yoktu (K-51'den sonra yalnızca config değişirse) |
 | `error` | Diğer hatalar |
 
 Bu durumların hepsinde `narrative=null` ve HTTP 200; `/explain` ve `/rag/query` 500 vermez. `/score` yolunda
 LLM hiç çağrılmaz (test sahte LLM'in çağrılmadığını doğrular).
 
-**Süre bütçesi** (`configs/api.yaml`, K-48): toplam 60 sn = planlayıcı 10 sn (yalnızca soru varsa) +
-açıklama 50 sn; toplamı aşan bölme config doğrulamasında reddedilir. API'nin agent kopyası daha kısa süreyle
+**Süre bütçesi** (`configs/api.yaml`, K-48, K-51): toplam 120 sn = planlayıcı 10 sn (yalnızca soru varsa) +
+açıklama 110 sn; toplamı aşan bölme config doğrulamasında reddedilir. Açıklama üretimi `num_predict: 300`
+token ve prompt'taki "4-6 cümle" talimatıyla kısa tutulur; API açılışında modeller arka planda ısıtılır ve
+`keep_alive: 30m` ile bellekte kalır (K-50). Isınmış modelle ölçüm: `explain_review` 91,2 sn, `explain_question`
+76,4 sn, ikisi de `llm_status=ok` (`docs/step10.md`). API'nin agent kopyası daha kısa süreyle
 kurulur; batch/demo betikleri `configs/agents.yaml` sürelerini (planlayıcı 60 sn, açıklama 240 sn) kullanır (K-41).
 
 ### 12.4 Online yol, tutarlılık ve gecikme

@@ -1,7 +1,8 @@
 """Planner: deterministic default plan, optional LLM plan validated against an allow-list.
 
 The LLM only chooses which allowed agents run and in which order. Any problem (LLM down, timeout,
-invalid JSON, unknown agent/intent, wrong order, missing rule step) means the default plan is used
+invalid JSON, unknown agent/intent, wrong order, missing rule step, missing explanation step for a
+question) means the default plan is used
 and the reason is returned so the coordinator can write `plan_fallback` to the trace.
 """
 
@@ -91,10 +92,13 @@ class Planner:
             raise
         except Exception as exc:  # noqa: BLE001 - any LLM failure means fallback
             raise AgentError(f"planner LLM failed: {type(exc).__name__}: {exc}") from exc
-        return self.validate(text)
+        return self.validate(text, question)
 
-    def validate(self, text: str) -> list[str]:
-        """Parse and check an LLM answer; return 'agent:intent' keys or raise ValueError."""
+    def validate(self, text: str, question: str | None = None) -> list[str]:
+        """Parse and check an LLM answer; return 'agent:intent' keys or raise ValueError.
+
+        With a question, the configured question step (explainer:explain, K-51) is mandatory.
+        """
         match = re.search(r"\{.*\}", text, flags=re.DOTALL)
         if not match:
             raise ValueError("plan is not JSON")
@@ -113,6 +117,9 @@ class Planner:
             raise ValueError("plan steps are not in dependency order")
         if self.settings.workflow.required_step.key not in keys:
             raise ValueError("plan does not contain the rule step")
+        question_step = self.settings.workflow.question_required_step
+        if question and question_step is not None and question_step.key not in keys:
+            raise ValueError("plan has no explanation step although the analyst asked a question")
         return keys
 
 

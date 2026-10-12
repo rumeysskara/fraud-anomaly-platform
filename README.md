@@ -128,7 +128,7 @@ curl -s -X POST localhost:8000/score -H 'Content-Type: application/json' \
      -d @examples/requests/block.json | python -m json.tool
 
 # /explain: facts (koddan, otoriter) + narrative (LLM, "destek bilgisi") + agent trace.
-# Toplam süre bütçesi 60 sn; süre dolarsa ya da Ollama kapalıysa facts döner, narrative=null.
+# Toplam süre bütçesi 120 sn (planlayıcı 10 + açıklama 110); süre dolarsa ya da Ollama kapalıysa facts döner, narrative=null.
 curl -s -X POST localhost:8000/explain -H 'Content-Type: application/json' \
      -d @examples/requests/explain_review.json | python -m json.tool
 

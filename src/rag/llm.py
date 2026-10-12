@@ -55,6 +55,8 @@ class OllamaLLMClient(LLMClient):
                 "seed": self.config.seed,
             },
         }
+        if self.config.num_predict is not None:
+            payload["options"]["num_predict"] = self.config.num_predict
         try:
             response = self._client.post(
                 "/api/chat", json=payload, timeout=self.config.timeout_seconds

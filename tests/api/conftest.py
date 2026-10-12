@@ -251,13 +251,13 @@ class NoPlanLLM(LLMClient):
 class World:
     """All fakes of one test in one place."""
 
-    def __init__(self, rag: FakeRAG | None = None, llm_timeout: float = 60.0) -> None:
-        # Same 1/6 planner, 5/6 explainer split as configs/api.yaml (10 s + 50 s of 60 s).
+    def __init__(self, rag: FakeRAG | None = None, llm_timeout: float = 120.0) -> None:
+        # Same 1/12 planner, 11/12 explainer split as configs/api.yaml (10 s + 110 s of 120 s).
         self.api_settings = ApiSettings(
             llm=LLMSettings(
                 timeout_seconds=llm_timeout,
-                planner_timeout_seconds=llm_timeout / 6,
-                explainer_timeout_seconds=llm_timeout * 5 / 6,
+                planner_timeout_seconds=llm_timeout / 12,
+                explainer_timeout_seconds=llm_timeout * 11 / 12,
             )
         )
         self.pipeline = FakePipeline()
