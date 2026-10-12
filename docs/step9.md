@@ -2,7 +2,7 @@
 
 **isFraud kullanıldı mı: hayır.** Agent katmanı (`src/agents/`, `configs/agents.yaml`, `scripts/run_agents_demo.py`) etiketi hiçbir yerde okumaz (`tests/agents/test_container.py` dosyaları tarar). Demo işlemleri yalnızca kural motorunun batch kararına göre seçildi (`reports/rules/rule_hits.parquet` içindeki `final_decision`).
 
-Karar kayıtları: K-34 ... K-38 (`docs/decisions.md`). Bu doküman yalnızca ürünün içindeki runtime agent'ları anlatır.
+Karar kayıtları: K-34 ... K-39 (`docs/decisions.md`). Bu doküman yalnızca ürünün içindeki runtime agent'ları anlatır.
 
 ## Ne yapıldı
 Adım 4-8 servislerinin (anomali skoru, context düzeltme, kural motoru, RAG) tek bir isteği birlikte işlemesini sağlayan beş agent ve bir mesaj bus'ı yazıldı. Skor ve karar deterministik servislerden gelir; yerel LLM yalnızca (1) serbest metinli soruda hangi agent'ların çalışacağını planlamak ve (2) analist açıklamasını yazmak (RAG) için kullanılır.
@@ -74,34 +74,39 @@ Koordinatör her adıma o ana kadarki sonuçları verir. Bir adımda girdi eksik
 ## Dayanıklılık (K-38)
 | Durum | Sonuç |
 |---|---|
+| RAG cevabı boş / yalnızca kaynak satırı / LLM yok | Şablon açıklama, `origin=template`, trace'te `explanation_fallback` |
 | ExplainerAgent hatası / zaman aşımı (240 sn) | Karar aynen döner, `explanation=null`, `status=degraded`, trace'te `explainer` `status=error` |
-| Ollama kapalıyken RAG | RAG kendi içinde retrieval-only döner (`flags=["llm_unavailable"]`, `text=null`, kaynaklar var) |
+| Ollama kapalıyken RAG | RAG retrieval-only döner (`llm_unavailable`, `text=null`); agent bunu boş sayıp şablon açıklamaya düşer, kaynaklar korunur |
 | Planlayıcı LLM hatası | Varsayılan plan, `plan_fallback` |
 | Anomaly/Context hatası | Hata kaydedilir; RuleAgent skoru kendisi ister, o da başarısızsa `decision=null`, `status=error` |
 | RuleAgent hatası | `decision=null`, `status=error`; karar uydurulmaz |
 Bus hiçbir agent hatasını istisna olarak dışarı atmaz; delegation derinliği 6 ile sınırlıdır.
 
-## Cooldown durumu (K-35)
-RuleAgent kural motorunu `update_state=False` ile çağırır: analiz, K-27 online cooldown deposunu yazmaz. Demo ve testler depoyu kirletmez. Bedeli: depo agent yolunda ilerlemediği için R03 cooldown'u canlıda her işlemi "ilk" görür.
+## Cooldown durumu (K-35, kullanıcı onayladı)
+RuleAgent kural motorunu `update_state=False` ile çağırır: agent yolu K-27 online cooldown deposunu yazmaz, demo ve testler depoyu kirletmez. Karar: Adım 10'da yalnızca `/score` endpoint'i depoyu günceller; agent yolu ve diğer endpoint'ler salt okurdur. Bedeli: agent yolundan analiz edilen işlemler depoyu ilerletmez.
+
+## Açıklama sorgusu ve şablona düşme (K-39)
+- Sorgu kararın gerçek nedeninden kurulur. Analist sorusundaki görev cümleleri ("incele", "inceleme notu yaz", "sadece karar") çıkarılır. Geriye soru kalmaz ve karar kural tetiklenmeden skor eşiğinden gelmişse sorgu skor eşiğini, en yüksek iki katmanı ve operasyon rehberindeki review adımlarını hedefler; kural kararında varsayılan kural sorusu kullanılır.
+- RAG cevabı boşsa, `null` ise (LLM yok) ya da yalnızca kaynak satırıysa şablon açıklama kullanılır: karar nedeni (`reasons`), en yüksek katman skorları, uygulanan C kuralları. Trace'e `explanation_fallback` yazılır; çıktı `origin="template"` ve yine "destek bilgisi" etiketlidir, karara etkisi yoktur.
 
 ## Gerçek demo (`make agents-demo`)
 Holdout'tan kural motorunun batch kararına göre üç işlem seçilir (her karar grubunun ortadaki TransactionID'si; cooldown tarafından elenmiş satırlar atlanır, çünkü online depo boştur). Gerçek Ollama (qwen2.5:7b, bge-m3) ile çalıştırıldı; üçünde de online karar batch kararıyla aynı çıktı. Dosyalar: `reports/agents/trace_{block,review,allow}_<id>.json`, `summary.json`.
 
 | TransactionID | Soru / plan | Karar | Tetiklenen | Context | Süre |
 |---|---|---|---|---|---|
-| 3522622 | yok / varsayılan (4 adım) | block (R01) | R01 | C3, C6b | 38,7 sn (açıklama 38,6 sn) |
-| 3519086 | "incele ve inceleme notu yaz" / LLM: rule, explainer | review (skor eşiği) | - | C6a | 25,0 sn (plan 4,6 sn, açıklama 20,4 sn) |
-| 3517771 | "sadece karar" / LLM: rule | allow | - | C1, C5, C9b | 3,6 sn (plan 3,5 sn) |
+| 3522622 | yok / varsayılan (4 adım) | block (R01) | R01 | C3, C6b | 41,8 sn (açıklama 41,7 sn) |
+| 3519086 | "incele ve inceleme notu yaz" / LLM: rule, explainer | review (skor eşiği) | - | C6a | 40,7 sn (plan 4,6 sn, açıklama 36,0 sn) |
+| 3517771 | "sadece karar" / LLM: rule | allow | - | C1, C5, C9b | 3,7 sn (plan 3,6 sn) |
 
 Örnek trace (TransactionID 3519086, LLM planı `rule:evaluate -> explainer:explain`; `rule` eksik skoru zincirle aldı):
 ```
-1. client      -> coordinator  analyze   [ok]  25033 ms
-2. coordinator -> rule         evaluate  [ok]    109 ms
-3. rule        -> context      adjust    [ok]     99 ms   (delegation, parent = 2)
-4. context     -> anomaly      score     [ok]     92 ms   (delegation, parent = 3)
-5. coordinator -> explainer    explain   [ok]  20354 ms
+1. client      -> coordinator  analyze   [ok]  40691 ms
+2. coordinator -> rule         evaluate  [ok]    130 ms
+3. rule        -> context      adjust    [ok]    120 ms   (delegation, parent = 2)
+4. context     -> anomaly      score     [ok]    111 ms   (delegation, parent = 3)
+5. coordinator -> explainer    explain   [ok]  35996 ms
 ```
-Aynı işlemin yanıtından (kısaltılmış): `decision: "review"`, `decision_source: "score"`, `reasons: ["Karar kuralı tetiklenmedi; skor 1.079 inceleme eşiğinin (1.070) üzerinde."]`, `explanation: {label: "destek bilgisi", affects_decision: false, grounded: true, ...}`.
+Aynı işlemin yanıtından (kısaltılmış): `decision: "review"`, `decision_source: "score"`, `reasons: ["Karar kuralı tetiklenmedi; skor 1.079 inceleme eşiğinin (1.070) üzerinde."]`, `explanation: {label: "destek bilgisi", origin: "rag", affects_decision: false, grounded: true, ...}`. Görev cümlesi sorgudan çıkarıldığı ve karar skor eşiğinden geldiği için RAG `operations_guide#skor-kaynakli-review` ve `feature_dictionary#skor-alanlari` bölümlerini getirdi; metin skor eşiğini ve review adımlarını anlatıyor (önceki sürümde ilgisiz R07 kartı ve yalnızca kaynak satırı dönmüştü). Gerçek demoda şablona düşme gerekmedi; bu yol testlerle doğrulandı.
 
 Block örneğinde (varsayılan plan) açıklama R01 kartından ve operasyon rehberinden alıntılı, `grounded=true`; yanıt kural gerekçesini (`0.88 USD küçük tutar ... son 1 saatte 15 önceki küçük işlem`) ayrıca `reasons` içinde taşır.
 
@@ -117,24 +122,25 @@ Block örneğinde (varsayılan plan) açıklama R01 kartından ve operasyon rehb
 | `src/agents/config.py`, `timeouts.py`, `errors.py` | Config modeli, sert zaman aşımı, istisnalar |
 | `configs/agents.yaml` | Roller, plan, süreler, prompt |
 | `scripts/run_agents_demo.py`, `reports/agents/` | Demo ve trace çıktıları |
-| `tests/agents/` | 38 test (LLM, RAG, servisler sahte) |
+| `tests/agents/` | 48 test (LLM, RAG, servisler sahte) |
 
 Container (yalnızca ekleme): `agents_settings`, `message_bus`, `planner_llm`, `planner`, `agent_factory`, `coordinator` (hepsi Singleton). Testlerde `container.rule_engine.override(...)`, `container.rag_service.override(...)` vb. kullanılır. Tasarım desenleri: Mediator (bus), Factory (`AgentFactory`), Strategy/Chain (plan adımları sırayla), Repository (kural yükleme Adım 7'de).
 
 ## Komutlar
-`make agents-demo` (Ollama ve `make rag-index` gerekir; Ollama yoksa demo yine biter, plan varsayılana düşer ve açıklama retrieval-only gelir). Testler: `make test` (Ollama gerekmez).
+`make agents-demo` (Ollama ve `make rag-index` gerekir; Ollama yoksa demo yine biter, plan varsayılana düşer ve açıklama şablondan gelir). Testler: `make test` (Ollama gerekmez).
 
 ## Bilinen sınırlar
-- **Gecikme:** açıklama adımı 16-39 sn (RAG, yerel 7B model; ilk istekte model yükleme dahil), LLM planı 3,5-4,6 sn. Karar ise 0,1-0,2 sn'de hazırdır; asıl bekleyen açıklamadır. Bus eşzamanlıdır (K-36), bir istek bitene kadar bir worker meşgul olur.
-- **"Grounded" sınırı:** Adım 8'deki kaynak kontrolü yalnızca anılan chunk id'lerinin getirilenler arasında olduğunu doğrular, içeriğin doğruluğunu değil. Gözlem: TransactionID 3519086'da kural tetiklenmedi (skor kaynaklı review), buna rağmen açıklama R07 kartını anıp `grounded=true` döndü ve metin yalnızca "Kaynaklar: ..." satırından ibaret kaldı; "inceleme notu yaz" gibi bir görev cümlesi RAG için kötü bir sorgu. Bu yüzden çıktı "destek bilgisi"dir; karar ve gerekçe `reasons` alanındadır.
+- **Gecikme:** açıklama adımı 16-42 sn (RAG, yerel 7B model; ilk istekte model yükleme dahil), LLM planı 3,5-4,6 sn. Karar ise 0,1-0,2 sn'de hazırdır; asıl bekleyen açıklamadır. Bus eşzamanlıdır (K-36), bir istek bitene kadar bir worker meşgul olur.
+- **"Grounded" sınırı:** Adım 8'deki kaynak kontrolü yalnızca anılan chunk id'lerinin getirilenler arasında olduğunu doğrular, içeriğin doğruluğunu değil. 3519086'nın yeni açıklaması `grounded=true` ama içerik hatası var: "entity" katmanını "cihaz geçmişine bakılır" diye anlatıyor ve eşiği "1,070'den büyük olmalı" diye yorumluyor (skor kaynaklı review'da ölçüt skorun eşiğe ulaşmasıdır). 7B model bağlamı yer yer yanlış özetliyor. Bu yüzden çıktı "destek bilgisi"dir; karar ve gerekçe `reasons` alanındadır.
+- **Görev cümlesi tespiti regex tabanlıdır** (`explainer.task_patterns`); listede olmayan bir görev ifadesi sorguda kalabilir. Boş-cevap kontrolü yalnızca boş/kaynak-satırı durumunu yakalar, yanlış ama dolu cevabı yakalamaz; abstain ("bilgi yok") cevabı da şablona düşürülmez.
 - **LLM planının değeri sınırlı:** plan yalnızca yardımcı agent'ların seçimini etkiler (örn. açıklama atlayıp ~30 sn kazanmak). Planın kalitesi ölçülmedi; küçük bir soru kümesiyle değerlendirilmedi.
 - **Zaman aşımında arka plan thread'i:** süre dolunca istek döner, ama LLM/RAG çağrısı HTTP timeout'una kadar arka planda sürer (daemon thread).
 - **Retry ve paralellik yok;** mesajlar süreç içidir, kalıcı kuyruk yoktur.
 - **Online kayıt hazır gelir:** agent'lar feature'lı kaydı bekler (`entity_key`, `has_device`, `email_ent_known`, cooldown anahtarları dahil); ham işlemden bu kaydı üretmek API adımının işidir. Demo kaydı `data/processed` parquet'lerinden kurar.
-- **Cooldown depoya yazılmaz** (K-35); depoyu güncelleyen kayıt yolu gelecek iş.
+- **Agent yolu cooldown depoya yazmaz** (K-35); Adım 10'da yalnızca `/score` yazar.
 - **Açıklama sorgusu:** serbest metin soru olduğu gibi RAG sorgusu olur; sorgu yeniden yazımı yoktur.
 
 ## Bir sonraki adımın girdisi (Adım 10: API)
 - `Container.coordinator().analyze(AnalystRequest(record=..., question=...)) -> AgentResponse` tek giriş noktasıdır; yanıt `decision`, `reasons`, `explanation` (destek bilgisi) ve `trace` içerir.
 - API ham işlemden feature'lı kaydı üretmeli (Adım 3 `FeaturePipeline`) ve zaman aşımlarını (açıklama 240 sn) HTTP seviyesinde ele almalı; sync endpoint veya iş kuyruğu seçimi gerekir.
-- Cooldown deposunu güncelleyen ayrı kayıt yolu (K-27 seçenek c, K-35).
+- Cooldown deposu: yalnızca `/score` `update_state=True` ile günceller; agent yolu ve diğer endpoint'ler salt okur (K-35).

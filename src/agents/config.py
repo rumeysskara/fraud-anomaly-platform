@@ -62,6 +62,10 @@ class ExplainerConfig(BaseModel):
     timeout_seconds: float = 240.0
     label: str = "destek bilgisi"
     default_question: str
+    score_question: str  # query when no rule fired and the score threshold decided
+    task_patterns: list[str] = Field(default_factory=list)  # task sentences removed from queries
+    empty_sources_pattern: str = r"kaynaklar?\s*:"
+    top_layers: int = 2
 
 
 class AgentSettings(BaseModel):

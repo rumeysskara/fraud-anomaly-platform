@@ -24,13 +24,13 @@
     ],
     "status": "ok",
     "explanation_present": true,
-    "total_ms": 38695.53,
+    "total_ms": 41766.88,
     "trace": [
-      "1. client -> coordinator analyze [ok] 38695.95 ms",
-      "2. coordinator -> anomaly score [ok] 49.11 ms",
-      "3. coordinator -> context adjust [ok] 6.75 ms",
-      "4. coordinator -> rule evaluate [ok] 8.67 ms",
-      "5. coordinator -> explainer explain [ok] 38629.96 ms"
+      "1. client -> coordinator analyze [ok] 41767.18 ms",
+      "2. coordinator -> anomaly score [ok] 48.12 ms",
+      "3. coordinator -> context adjust [ok] 6.51 ms",
+      "4. coordinator -> rule evaluate [ok] 8.42 ms",
+      "5. coordinator -> explainer explain [ok] 41702.78 ms"
     ]
   },
   {
@@ -42,7 +42,7 @@
         "explainer:explain"
       ],
       "fallback_reason": null,
-      "duration_ms": 4568.22
+      "duration_ms": 4563.18
     },
     "decision": "review",
     "batch_decision": "review",
@@ -53,13 +53,13 @@
     ],
     "status": "ok",
     "explanation_present": true,
-    "total_ms": 25033.06,
+    "total_ms": 40690.86,
     "trace": [
-      "1. client -> coordinator analyze [ok] 25033.44 ms",
-      "2. coordinator -> rule evaluate [ok] 109.39 ms",
-      "3. rule -> context adjust [ok] 99.59 ms",
-      "4. context -> anomaly score [ok] 91.81 ms",
-      "5. coordinator -> explainer explain [ok] 20354.28 ms"
+      "1. client -> coordinator analyze [ok] 40691.23 ms",
+      "2. coordinator -> rule evaluate [ok] 130.32 ms",
+      "3. rule -> context adjust [ok] 120.11 ms",
+      "4. context -> anomaly score [ok] 111.0 ms",
+      "5. coordinator -> explainer explain [ok] 35996.48 ms"
     ]
   },
   {
@@ -70,7 +70,7 @@
         "rule:evaluate"
       ],
       "fallback_reason": null,
-      "duration_ms": 3546.25
+      "duration_ms": 3613.56
     },
     "decision": "allow",
     "batch_decision": "allow",
@@ -83,12 +83,12 @@
     ],
     "status": "ok",
     "explanation_present": false,
-    "total_ms": 3638.41,
+    "total_ms": 3723.92,
     "trace": [
-      "1. client -> coordinator analyze [ok] 3638.45 ms",
-      "2. coordinator -> rule evaluate [ok] 91.83 ms",
-      "3. rule -> context adjust [ok] 82.84 ms",
-      "4. context -> anomaly score [ok] 75.77 ms"
+      "1. client -> coordinator analyze [ok] 3723.94 ms",
+      "2. coordinator -> rule evaluate [ok] 109.62 ms",
+      "3. rule -> context adjust [ok] 99.98 ms",
+      "4. context -> anomaly score [ok] 92.23 ms"
     ]
   }
 ]

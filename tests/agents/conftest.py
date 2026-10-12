@@ -71,7 +71,13 @@ class FakeAdjuster(ContextAdjuster):
 class FakeEngine:
     """Rule engine stand-in: returns `decision` and records its calls."""
 
-    def __init__(self, decision: str = "review", triggered: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        decision: str = "review",
+        triggered: list[str] | None = None,
+        source: str | None = None,
+    ) -> None:
+        self.source = source
         self.decision = decision
         self.triggered = ["R01"] if triggered is None else triggered
         self.calls: list[dict[str, Any]] = []
@@ -83,7 +89,7 @@ class FakeEngine:
         return RuleEngineResult(
             action=self.decision,
             final_decision=self.decision,
-            decision_source=self.triggered[0] if self.triggered else "default",
+            decision_source=self.source or (self.triggered[0] if self.triggered else "default"),
             final_score=0.8,
             triggered_rules=self.triggered,
             applied_rules=self.triggered,

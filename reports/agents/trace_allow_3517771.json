@@ -1,6 +1,6 @@
 {
   "question": "TransactionID 3517771 işleminin kararı nedir? Açıklama gerekmez, sadece karar.",
-  "correlation_id": "f348497e953841128e0543281f875994",
+  "correlation_id": "786f4941dc4f49609e366f343bbe5f25",
   "transaction_id": 3517771,
   "status": "ok",
   "decision": "allow",
@@ -31,21 +31,21 @@
       "rule:evaluate"
     ],
     "fallback_reason": null,
-    "duration_ms": 3546.25
+    "duration_ms": 3613.56
   },
   "errors": [],
-  "total_ms": 3638.41,
+  "total_ms": 3723.92,
   "trace": [
     {
       "seq": 1,
-      "message_id": "e58fe5e42e7443928a06d9766f015002",
+      "message_id": "8704ef2371284a15a21ababca8d350f0",
       "parent_id": null,
       "sender": "client",
       "recipient": "coordinator",
       "intent": "analyze",
       "status": "ok",
-      "duration_ms": 3638.45,
-      "timestamp": "2026-10-12T04:32:53.987986Z",
+      "duration_ms": 3723.94,
+      "timestamp": "2026-10-12T05:09:10.021389Z",
       "payload_keys": [
         "question",
         "record"
@@ -54,14 +54,14 @@
     },
     {
       "seq": 2,
-      "message_id": "6b588c38fb9a4c4eb2d4a93fecd597aa",
-      "parent_id": "e58fe5e42e7443928a06d9766f015002",
+      "message_id": "d8d4464b57984351a6d7af475693bdcb",
+      "parent_id": "8704ef2371284a15a21ababca8d350f0",
       "sender": "coordinator",
       "recipient": "rule",
       "intent": "evaluate",
       "status": "ok",
-      "duration_ms": 91.83,
-      "timestamp": "2026-10-12T04:32:57.534583Z",
+      "duration_ms": 109.62,
+      "timestamp": "2026-10-12T05:09:13.635564Z",
       "payload_keys": [
         "adjusted_score",
         "adjusted_score_unclipped",
@@ -73,14 +73,14 @@
     },
     {
       "seq": 3,
-      "message_id": "79d0f6f0fab14a05a547a24768605759",
-      "parent_id": "6b588c38fb9a4c4eb2d4a93fecd597aa",
+      "message_id": "90f316a60a8f4954bafe3d8119b975e0",
+      "parent_id": "d8d4464b57984351a6d7af475693bdcb",
       "sender": "rule",
       "recipient": "context",
       "intent": "adjust",
       "status": "ok",
-      "duration_ms": 82.84,
-      "timestamp": "2026-10-12T04:32:57.534739Z",
+      "duration_ms": 99.98,
+      "timestamp": "2026-10-12T05:09:13.635985Z",
       "payload_keys": [
         "anomaly_score",
         "layer_scores",
@@ -90,14 +90,14 @@
     },
     {
       "seq": 4,
-      "message_id": "9cd0ed8205d7410ea4b3b7ef08260a6b",
-      "parent_id": "79d0f6f0fab14a05a547a24768605759",
+      "message_id": "7a0a9d7cdb7b49de8f6812943eedd12b",
+      "parent_id": "90f316a60a8f4954bafe3d8119b975e0",
       "sender": "context",
       "recipient": "anomaly",
       "intent": "score",
       "status": "ok",
-      "duration_ms": 75.77,
-      "timestamp": "2026-10-12T04:32:57.534878Z",
+      "duration_ms": 92.23,
+      "timestamp": "2026-10-12T05:09:13.636361Z",
       "payload_keys": [
         "record"
       ],

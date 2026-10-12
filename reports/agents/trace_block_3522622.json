@@ -1,6 +1,6 @@
 {
   "question": null,
-  "correlation_id": "e22c30b680994284963ce832f890f2df",
+  "correlation_id": "d85e530157214f9597fdb3e7946bb7c9",
   "transaction_id": 3522622,
   "status": "ok",
   "decision": "block",
@@ -28,6 +28,7 @@
   "explanation": {
     "label": "destek bilgisi",
     "affects_decision": false,
+    "origin": "rag",
     "text": "Bu işlem, `R01` kuralı tarafından tetiklenerek block kararı alındı. Kural, işlem tutarı (`TransactionAmt`) 25,95 USD'den küçük ve aynı entity'de son 1 saatteki önceki küçük tutarlı işlem sayısı 2 veya daha fazla olması koşullarını sağladığında kart testi şüphesi oluşturur.\n\nAşağıdaki adımları takip etmek isteyen analist:\n\n1. `triggered_rules` ve `reasons` alanlarından tetiklenen kuralları ve gerçek değerleri oku.\n2. Aynı entity'nin (kart grubu) son 24 saatteki işlemlerini incele; tekrar eden küçük tutarlar, farklı cihaz veya ülke kodları var mı bak.\n3. Kart sahibine başka bir kanaldan ulaşarak işlemi doğrula; doğrulanana kadar blokajı koru.\n4. Doğrulanırsa işlemi serbest bırak ve vakayı yanlış pozitif olarak not et; doğrulanamazsa kartı kısıtlama sürecine ilet.\n\nKaynaklar: [rule_cards#r01-card-testing] [operations_guide#block-karari]",
     "sources": [
       {
@@ -99,18 +100,18 @@
     "duration_ms": 0.0
   },
   "errors": [],
-  "total_ms": 38695.53,
+  "total_ms": 41766.88,
   "trace": [
     {
       "seq": 1,
-      "message_id": "b7c8668dc7b743e6b142b8c4fdfdff32",
+      "message_id": "86716c3e1cea4fd5829cfc881643c973",
       "parent_id": null,
       "sender": "client",
       "recipient": "coordinator",
       "intent": "analyze",
       "status": "ok",
-      "duration_ms": 38695.95,
-      "timestamp": "2026-10-12T04:31:50.247652Z",
+      "duration_ms": 41767.18,
+      "timestamp": "2026-10-12T05:07:47.540902Z",
       "payload_keys": [
         "question",
         "record"
@@ -119,14 +120,14 @@
     },
     {
       "seq": 2,
-      "message_id": "2e6a252ad2d04da8a671de84cf6f2dc3",
-      "parent_id": "b7c8668dc7b743e6b142b8c4fdfdff32",
+      "message_id": "ed4f99828f9b4f1191dd50a7d407aace",
+      "parent_id": "86716c3e1cea4fd5829cfc881643c973",
       "sender": "coordinator",
       "recipient": "anomaly",
       "intent": "score",
       "status": "ok",
-      "duration_ms": 49.11,
-      "timestamp": "2026-10-12T04:31:50.247762Z",
+      "duration_ms": 48.12,
+      "timestamp": "2026-10-12T05:07:47.540984Z",
       "payload_keys": [
         "record"
       ],
@@ -134,14 +135,14 @@
     },
     {
       "seq": 3,
-      "message_id": "136a9585e2a0406ba6c13d6ef3059c56",
-      "parent_id": "b7c8668dc7b743e6b142b8c4fdfdff32",
+      "message_id": "f0443287f74146739c41256b1144db9e",
+      "parent_id": "86716c3e1cea4fd5829cfc881643c973",
       "sender": "coordinator",
       "recipient": "context",
       "intent": "adjust",
       "status": "ok",
-      "duration_ms": 6.75,
-      "timestamp": "2026-10-12T04:31:50.296940Z",
+      "duration_ms": 6.51,
+      "timestamp": "2026-10-12T05:07:47.589169Z",
       "payload_keys": [
         "anomaly_score",
         "layer_scores",
@@ -151,14 +152,14 @@
     },
     {
       "seq": 4,
-      "message_id": "e2447457ea2b449ab83f34f0758e7d1a",
-      "parent_id": "b7c8668dc7b743e6b142b8c4fdfdff32",
+      "message_id": "15d020d7926d4d2e846b2727bd62ed04",
+      "parent_id": "86716c3e1cea4fd5829cfc881643c973",
       "sender": "coordinator",
       "recipient": "rule",
       "intent": "evaluate",
       "status": "ok",
-      "duration_ms": 8.67,
-      "timestamp": "2026-10-12T04:31:50.303752Z",
+      "duration_ms": 8.42,
+      "timestamp": "2026-10-12T05:07:47.595741Z",
       "payload_keys": [
         "adjusted_score",
         "adjusted_score_unclipped",
@@ -170,15 +171,17 @@
     },
     {
       "seq": 5,
-      "message_id": "0a48b14690c145d797d5cb80adca8494",
-      "parent_id": "b7c8668dc7b743e6b142b8c4fdfdff32",
+      "message_id": "dc30db2722804e3bab4219b736e15e88",
+      "parent_id": "86716c3e1cea4fd5829cfc881643c973",
       "sender": "coordinator",
       "recipient": "explainer",
       "intent": "explain",
       "status": "ok",
-      "duration_ms": 38629.96,
-      "timestamp": "2026-10-12T04:31:50.312449Z",
+      "duration_ms": 41702.78,
+      "timestamp": "2026-10-12T05:07:47.604192Z",
       "payload_keys": [
+        "context_rules",
+        "layer_scores",
         "question",
         "rule_result"
       ],

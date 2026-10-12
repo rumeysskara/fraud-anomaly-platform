@@ -123,7 +123,13 @@ class CoordinatorAgent(Agent):
         else:  # explainer: needs the rule result (plan order guarantees it ran before)
             if RULE not in state:
                 raise RuntimeError("no rule result to explain")
-            payload = ExplainRequest(rule_result=state[RULE], question=request.question)
+            rule: EvaluateReply = state[RULE]
+            payload = ExplainRequest(
+                rule_result=rule,
+                question=request.question,
+                layer_scores=base.layer_scores if base else rule.layer_scores,
+                context_rules=adjusted.applied_rules if adjusted else rule.context_rules,
+            )
             model = ExplainReply
         return model.model_validate(self.delegate(agent, intent, payload, parent))
 

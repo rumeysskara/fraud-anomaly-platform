@@ -158,6 +158,8 @@ class ExplainRequest(_Strict):
 
     rule_result: EvaluateReply
     question: str | None = None
+    layer_scores: dict[str, float] = Field(default_factory=dict)
+    context_rules: list[str] = Field(default_factory=list)
 
 
 class ExplainReply(_Strict):
@@ -165,6 +167,7 @@ class ExplainReply(_Strict):
 
     label: str
     affects_decision: Literal[False] = False
+    origin: Literal["rag", "template"] = "rag"  # template: RAG answer was empty (K-39)
     text: str | None
     sources: list[dict[str, Any]] = Field(default_factory=list)
     cited_ids: list[str] = Field(default_factory=list)

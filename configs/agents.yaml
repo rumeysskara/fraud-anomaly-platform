@@ -55,3 +55,18 @@ explainer:
   label: "destek bilgisi"
   default_question: >-
     Bu işlem neden bu karara ulaştı? Tetiklenen kuralların anlamı ve analistin bakması gerekenler nelerdir?
+  # K-39: the RAG query is built from the real reason of the decision.
+  score_question: >-
+    Anomali skoru inceleme eşiğini aştığı için review kararı verildiğinde skor eşiği nasıl
+    çalışır, anomali katmanlarından ({layers}) hangisi ne anlama gelir ve operasyon rehberindeki
+    review adımları nelerdir?
+  # Sentences of the analyst question matching one of these regexes are task instructions, not
+  # knowledge questions; they are removed before retrieval (case-insensitive).
+  task_patterns:
+    - "\\bincele\\b"
+    - "\\bnot(u)?\\s+yaz"
+    - "\\byaz\\b"
+    - "açıklama gerekmez"
+    - "\\bsadece\\s+karar"
+    - "transactionid\\s*\\d+"
+  top_layers: 2         # highest layer scores named in the query and in the template text
